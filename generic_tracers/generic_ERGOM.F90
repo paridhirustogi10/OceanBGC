@@ -1844,7 +1844,10 @@ contains
          units      = 'mol/kg',            &
          prog       = .true.,               &
          flux_gas       = .true.,           &
-         flux_gas_param = (/ 9.36e-07, 9.7561e-06 /), &
+         !flux_gas_param = (/ 9.36e-07, 9.7561e-06 /), &
+         flux_gas_param = (/ 6.97e-07, 9.7561e-06 /),  &
+         ! 9.36e-7 is value in esm2; it should be 6.97e-7 (0.251*0.01/3600) in
+         ! esm4; liao         
          flux_gas_restart_file  = 'ocean_ergom_airsea_flux.res.nc', &
          flux_bottom= .true.             )
 
@@ -1939,7 +1942,10 @@ contains
          flux_gas   = .true.,                                          &
 !         flux_gas_name  = 'o2_flux',                                   &
          flux_gas_molwt = WTMO2,                                       &
-         flux_gas_param = (/ 9.36e-07, 9.7561e-06 /),                  &
+         !flux_gas_param = (/ 9.36e-07, 9.7561e-06 /), &
+         flux_gas_param = (/ 6.97e-07, 9.7561e-06 /),  &
+         ! 9.36e-7 is value in esm2; it should be 6.97e-7 (0.251*0.01/3600) in
+         ! esm4; liao
          flux_gas_restart_file  = 'ocean_ergom_airsea_flux.res.nc',    &
          flux_bottom= .true.             )
 	 

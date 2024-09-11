@@ -567,9 +567,12 @@ contains
            flux_gas_type  = 'air_sea_gas_flux_generic',                                          &
            flux_gas_name  = 'o2_flux' // trim(bling%suffix),                              &
            flux_gas_molwt = WTMO2,                                                              &
-           flux_gas_param = (/ 9.36e-07, 9.7561e-06 /),                                         &
-           flux_bottom    = .true.,                                                             &
-           flux_gas_restart_file  = 'ocean_minibling_airsea_flux.res.nc' )
+           !flux_gas_param = (/ 9.36e-07, 9.7561e-06 /),                  &
+           flux_gas_param = (/ 6.97e-07, 9.7561e-06 /),                  &
+           ! 9.36e-7 is value in esm2; it should be 6.97e-7 (0.251*0.01/3600) in
+           ! esm4; liao  
+          flux_bottom    = .true.,                                                             &
+          flux_gas_restart_file  = 'ocean_minibling_airsea_flux.res.nc' )
 
    
     !       PO4
@@ -652,7 +655,10 @@ contains
              flux_gas_type  = 'air_sea_gas_flux_generic',                                        &
              flux_gas_name  = 'co2_flux' // trim(bling%suffix),                           &
              flux_gas_molwt = WTMCO2,                                                           &
-             flux_gas_param = (/ 9.36e-07, 9.7561e-06 /),                                       &
+            !flux_gas_param = (/ 9.36e-07, 9.7561e-06 /),                  &
+             flux_gas_param = (/ 6.97e-07, 9.7561e-06 /),                  &
+            ! 9.36e-7 is value in esm2; it should be 6.97e-7 (0.251*0.01/3600) in
+            ! esm4; liao             
              flux_gas_restart_file  = 'ocean_minibling_airsea_flux.res.nc',  &
              flux_runoff    = .false.,                                                          &
              flux_param     = (/ 12.011e-03 /),                                                 &
@@ -683,7 +689,10 @@ contains
              flux_gas_type  = 'air_sea_gas_flux_generic',                                        &
              flux_gas_name  = 'c14o2_flux' // trim(bling%suffix),                         &
              flux_gas_molwt = WTMCO2,                                                           &
-             flux_gas_param = (/ 9.36e-07, 9.7561e-06 /),                                       &
+            !flux_gas_param = (/ 9.36e-07, 9.7561e-06 /),                  &
+             flux_gas_param = (/ 6.97e-07, 9.7561e-06 /),                  &
+            ! 9.36e-7 is value in esm2; it should be 6.97e-7 (0.251*0.01/3600) in
+            ! esm4; liao             
              flux_gas_restart_file  = 'ocean_minibling_airsea_flux.res.nc',  &
              flux_param     = (/ 14.e-03 /),                                                    &
              flux_bottom    = .true.,                                                           &
