@@ -167,7 +167,8 @@ contains
     write (stdlogunit, generic_tracer_nml)
 
     ! Use Wanninkhoff 2014 parameters for air-sea gas exchange if as_param='W14' in generic_tracer_nml
-    if (as_param == 'gfdl_cmip6') then
+    !if (as_param == 'gfdl_cmip6') then
+    if ((as_param == 'gfdl_cmip6') .or. (as_param == 'W14') .or. (as_param=='W92')) then !liao changes      
       if (do_generic_abiotic) as_param_abiotic = as_param
       if (do_generic_CFC)     as_param_cfc     = as_param
       if (do_generic_SF6)     as_param_sf6     = as_param

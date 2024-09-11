@@ -18,8 +18,8 @@
 module g_tracer_utils
 #include <fms_platform.h>
 
-  use coupler_types_mod, only: coupler_2d_bc_type, ind_flux, ind_deltap, ind_kw
-  use coupler_types_mod, only: ind_alpha, ind_csurf, ind_sc_no
+  use coupler_types_mod, only: coupler_2d_bc_type, ind_flux, ind_deltap, ind_kw, ind_kw_asym ! Xiaohui
+  use coupler_types_mod, only: ind_alpha, ind_csurf, ind_sc_no, ind_out1, ind_out2 ! # bgr_prustogi
   use FMS_coupler_util,  only: extract_coupler_values, set_coupler_values
   use atmos_ocean_fluxes_mod, only: aof_set_coupler_flux
   use mpp_mod,           only: mpp_error, NOTE, WARNING, FATAL
@@ -73,12 +73,14 @@ module g_tracer_utils
   !   ! MOM keeps the field at 3 time levels, hence 4D.
   !   real, _ALLOCATABLE, dimension(:,:,:,:):: field  _NULL
   !
-  !   ! Surface flux, surface gas flux, deltap and kw
+  !   ! Surface flux, surface gas flux, deltap, kw and kw_asym
   !   real, _ALLOCATABLE, dimension(:,:)    :: stf    _NULL
   ! 
   !   real, _ALLOCATABLE, dimension(:,:)    :: deltap    _NULL
   ! 
   !   real, _ALLOCATABLE, dimension(:,:)    :: kw    _NULL
+  !
+  !   real, _ALLOCATABLE, dimension(:,:)    :: kw_asym    _NULL !Xiaohui
   ! 
   !   ! Bottom  flux
   !   real, _ALLOCATABLE, dimension(:,:)    :: btf    _NULL
@@ -116,8 +118,8 @@ module g_tracer_utils
   !   ! An auxiliary 3D field for keeping model dependent change tendencies, ... 
   !   real, _ALLOCATABLE, dimension(:,:,:)  :: tendency  _NULL
   !
-  !   ! IDs for using diag_manager tools
-  !   integer :: diag_id_field=-1, diag_id_stf=-1, diag_id_stf_gas=-1, diag_id_deltap=-1, diag_id_kw=-1, diag_id_trunoff=-1
+  !   ! IDs for using diag_manager tools ! Xiaohui
+  !   integer :: diag_id_field=-1, diag_id_stf=-1, diag_id_stf_gas=-1, diag_id_deltap=-1, diag_id_kw=-1, diag_id_kw_asym=-1, diag_id_trunoff=-1
   !   integer :: diag_id_alpha=-1, diag_id_csurf=-1, diag_id_sc_no=-1, diag_id_aux=-1
   !
   !  ! Tracer Initial concentration if constant everywhere
@@ -188,7 +190,7 @@ module g_tracer_utils
      ! for the field option
      real, pointer,      dimension(:,:,:)  :: field_3d => NULL()
 
-     ! Surface flux, surface flux of gas, deltap and kw
+     ! Surface flux, surface flux of gas, deltap, kw, and kw_asym
      real, _ALLOCATABLE, dimension(:,:)    :: stf    _NULL
 
      real, _ALLOCATABLE, dimension(:,:)    :: stf_gas    _NULL
@@ -196,6 +198,7 @@ module g_tracer_utils
      real, _ALLOCATABLE, dimension(:,:)    :: deltap    _NULL
 
      real, _ALLOCATABLE, dimension(:,:)    :: kw    _NULL
+     real, _ALLOCATABLE, dimension(:,:)    :: kw_asym    _NULL ! Xiaohui
 
      ! Bottom  flux
      real, _ALLOCATABLE, dimension(:,:)    :: btf    _NULL
@@ -222,6 +225,10 @@ module g_tracer_utils
 
      real, _ALLOCATABLE, dimension(:,:)    :: sc_no  _NULL 
 
+     ! BGR adding for extra outputs
+     real, _ALLOCATABLE, dimension(:,:)    :: u10  _NULL ! # bgr_prustogi
+     real, _ALLOCATABLE, dimension(:,:)    :: ust  _NULL
+
      ! An 3D field for vertical movement, esp. for zooplankton, ... 
      real, _ALLOCATABLE, dimension(:,:,:)  :: vmove  _NULL
 
@@ -231,16 +238,22 @@ module g_tracer_utils
      ! An 3D field for implicit vertical diffusion
      real, _ALLOCATABLE, dimension(:,:,:)  :: vdiffuse_impl  _NULL
 
+     ! An 3D field for implicit vertical diffusion, concentration   !liao added
+     real, _ALLOCATABLE, dimension(:,:,:)  :: vdiffusec_impl  _NULL !liao added
+     ! An 3D field for implicit vertical diffusion                         !liao
+     real, _ALLOCATABLE, dimension(:,:,:)  :: boundary_forcing_tend  _NULL !liao
+
      ! An auxiliary 3D field for keeping model dependent change tendencies, ... 
      real, pointer, dimension(:,:,:)  :: tendency  => NULL()
 
-     ! IDs for using diag_manager tools
-     integer :: diag_id_field=-1, diag_id_stf=-1, diag_id_stf_gas=-1, diag_id_deltap=-1, diag_id_kw=-1, diag_id_trunoff=-1
+     ! IDs for using diag_manager tools ! Xiaohui
+     integer :: diag_id_field=-1, diag_id_stf=-1, diag_id_stf_gas=-1, diag_id_deltap=-1, diag_id_kw=-1,diag_id_kw_asym=-1, diag_id_trunoff=-1
      integer :: diag_id_stf_gas_aux=-1
-     integer :: diag_id_alpha=-1, diag_id_csurf=-1, diag_id_sc_no=-1, diag_id_aux=-1
+     integer :: diag_id_alpha=-1, diag_id_csurf=-1, diag_id_sc_no=-1, diag_id_aux=-1, diag_id_u10=-1, diag_id_ust=-1 ! # bgr_prustogi
      integer :: diag_id_btf=-1,diag_id_btm=-1, diag_id_vmove=-1, diag_id_vdiff=-1
      integer :: diag_id_vdiffuse_impl = -1, diag_id_tendency = -1, diag_id_field_taup1 = -1
-
+     integer :: diag_id_vdiffusec_impl = -1, diag_id_boundary_forcing_tend = -1 !liao
+     
      ! Tracer Initial concentration if constant everywhere
      real    :: const_init_value = 0.0
      real    :: initial_value = 0.0
@@ -257,7 +270,7 @@ module g_tracer_utils
      logical :: flux_drydep = .false. !Is there a dry deposition?
      logical :: flux_bottom = .false. !Is there a flux through bottom?
      logical :: has_btm_reservoir = .false. !Is there a flux bottom reservoir?
-     logical :: runoff_added_to_stf = .false. ! Has flux in from runoff been added to stf?
+     !logical :: runoff_added_to_stf = .false. ! Has flux in from runoff been added to stf?
 
      ! Flux identifiers to be set by aof_set_coupler_flux()
      integer :: flux_gas_ind    = -1  
@@ -993,6 +1006,12 @@ contains
        allocate(g_tracer%tendency(isd:ied,jsd:jed,nk)); g_tracer%tendency(:,:,:) = 0.0
        allocate(g_tracer%vdiffuse_impl(isd:ied,jsd:jed,nk))
        g_tracer%vdiffuse_impl(:,:,:) = 0.0
+       !liao
+       allocate(g_tracer%vdiffusec_impl(isd:ied,jsd:jed,nk))
+       g_tracer%vdiffusec_impl(:,:,:) = 0.0
+       allocate(g_tracer%boundary_forcing_tend(isd:ied,jsd:jed,nk))
+       g_tracer%boundary_forcing_tend(:,:,:) = 0.0
+       !liao
     endif
 
     if(g_tracer%flux_gas) then
@@ -1003,6 +1022,9 @@ contains
           allocate(g_tracer%sc_no(isd:ied,jsd:jed));g_tracer%sc_no=0.0
           allocate(g_tracer%deltap(isd:ied,jsd:jed)); g_tracer%deltap(:,:) = 0.0 
           allocate(g_tracer%kw(isd:ied,jsd:jed)); g_tracer%kw(:,:) = 0.0 
+          allocate(g_tracer%kw_asym(isd:ied,jsd:jed)); g_tracer%kw_asym(:,:) =0.0 ! Xiaohui
+          allocate(g_tracer%u10(isd:ied,jsd:jed)); g_tracer%u10(:,:) =0.0  !bgr-prustogi
+          allocate(g_tracer%ust(isd:ied,jsd:jed)); g_tracer%ust(:,:) = 0.0 !bgr-prustogi
        endif
     endif
     if(g_tracer%flux_runoff) then
@@ -1177,6 +1199,25 @@ contains
          'Implicit vertical diffusion of ' // trim(g_tracer%alias),      &
          trim('mole/m^2/s'),                  &
          missing_value = -1.0e+20)
+   !liao
+    string=trim(g_tracer%alias) // trim("_vdiffusec_impl")
+    g_tracer%diag_id_vdiffusec_impl =g_register_diag_field(g_tracer%package_name, &
+         trim(string),                 &
+         g_tracer_com%axes(1:3),       &
+         g_tracer_com%init_time,       &
+         'Implicit vertical diffusion concentration of ' //trim(g_tracer%alias),&
+         trim('mole/kg/s'),                  &
+         missing_value = -1.0e+20)
+
+    string=trim(g_tracer%alias) // trim("_boundary_forcing_tend")
+    g_tracer%diag_id_boundary_forcing_tend =g_register_diag_field(g_tracer%package_name, &
+         trim(string),                 &
+         g_tracer_com%axes(1:3),       &
+         g_tracer_com%init_time,       &
+         'Boundary forcing tendency concentration of ' // trim(g_tracer%alias),&
+         trim('mole/kg/s'),                  &
+         missing_value = -1.0e+20)
+    !liao
 
     string=trim(g_tracer%alias) // trim("_tendency")
     g_tracer%diag_id_tendency = g_register_diag_field(g_tracer%package_name, &
@@ -1241,6 +1282,16 @@ contains
          trim('m/sec'),                &
          missing_value = -1.0e+20)
 
+    ! Xiaohui
+    string=trim(g_tracer%alias) // trim("_kw_asym")
+    g_tracer%diag_id_kw_asym = g_register_diag_field(g_tracer%package_name, &
+         trim(string),                 &
+         g_tracer_com%axes(1:2),       &
+         g_tracer_com%init_time,       &
+         'Asymmetric Gas Exchange piston velocity for ' // trim(g_tracer%alias),&
+         trim('m/sec'),                &
+         missing_value = -1.0e+20)
+
     string=trim(g_tracer%alias) // trim("_btf")
     g_tracer%diag_id_btf = g_register_diag_field(g_tracer%package_name, &
          trim(string),                 &
@@ -1293,6 +1344,25 @@ contains
          g_tracer_com%init_time,       &
          'Ocean surface Schmidt Number for ' // trim(g_tracer%alias), &
          trim(g_tracer%units),         &
+         missing_value = -1.0e+20)
+
+    ! bgr_prustogi
+    string=trim(g_tracer%alias) // trim("_u10")
+    g_tracer%diag_id_u10 = g_register_diag_field(g_tracer%package_name, &
+         trim(string),                 &
+         g_tracer_com%axes(1:2),       &
+         g_tracer_com%init_time,       &
+         'Wind Speed used in parameterization for ' // trim(g_tracer%alias), &
+         trim('m/s'),         &
+         missing_value = -1.0e+20)
+
+    string=trim(g_tracer%alias) // trim("_ust")
+    g_tracer%diag_id_ust = g_register_diag_field(g_tracer%package_name, &
+         trim(string),                 &
+         g_tracer_com%axes(1:2),       &
+         g_tracer_com%init_time,       &
+         'Wind friction speed used in parameterization for ' //trim(g_tracer%alias), &
+         trim('m/s'),         &
          missing_value = -1.0e+20)
 
   end subroutine g_tracer_register_diag
@@ -1411,14 +1481,14 @@ contains
   !  </IN>
   ! </SUBROUTINE>
 
-  subroutine g_tracer_coupler_get(g_tracer_list,IOB_struc, weight, model_time)
+  subroutine g_tracer_coupler_get(g_tracer_list,IOB_struc, weight, model_time) !Xiaohui
     type(g_tracer_type),          pointer :: g_tracer_list, g_tracer 
     type(coupler_2d_bc_type),    intent(in) :: IOB_struc
     type(time_type),    optional,intent(in) :: model_time
     real,               optional,intent(in) :: weight
     logical :: used
     character(len=fm_string_len), parameter :: sub_name = 'g_tracer_coupler_get'
-    real, dimension(:,:), allocatable :: temp_array,stf_array,stf_gas_array,deltap_array, kw_array
+    real, dimension(:,:), allocatable :: temp_array,stf_array,stf_gas_array,deltap_array, kw_array, kw_asym_array, u10_array, ust_array 
 
     if(.NOT. associated(g_tracer_list)) call mpp_error(FATAL, trim(sub_name)//&
          ": No tracer in the list.")
@@ -1429,7 +1499,9 @@ contains
     allocate(stf_gas_array(g_tracer_com%isd:g_tracer_com%ied,g_tracer_com%jsd:g_tracer_com%jed))
     allocate(deltap_array(g_tracer_com%isd:g_tracer_com%ied,g_tracer_com%jsd:g_tracer_com%jed))
     allocate(kw_array(g_tracer_com%isd:g_tracer_com%ied,g_tracer_com%jsd:g_tracer_com%jed))
-
+    allocate(kw_asym_array(g_tracer_com%isd:g_tracer_com%ied,g_tracer_com%jsd:g_tracer_com%jed)) !Xiaohui
+    allocate(u10_array(g_tracer_com%isd:g_tracer_com%ied,g_tracer_com%jsd:g_tracer_com%jed)) ! bgr_prustogi
+    allocate(ust_array(g_tracer_com%isd:g_tracer_com%ied,g_tracer_com%jsd:g_tracer_com%jed))
 
     !Go through the list of tracers 
     do  
@@ -1476,8 +1548,68 @@ contains
                   is=g_tracer_com%isc, ie=g_tracer_com%iec,&
                   js=g_tracer_com%jsc, je=g_tracer_com%jec)
              !This does temp_array=conv *BC_struc%bc(flux_gas_ind)%field(ind_flux)%values
-             
+             deltap_array = deltap_array+temp_array
+
+             temp_array=0.0
+             kw_array=0.0
+             call extract_coupler_values(BC_struc  =IOB_struc, &
+                  BC_index  =g_tracer%flux_gas_ind,    &
+                  BC_element=ind_kw,                   &
+                  array_out =temp_array,               &
+                  conversion=1.0,                      &
+                  ilb=g_tracer_com%isd,jlb=g_tracer_com%jsd,& !lower bounds of array_out
+                  is=g_tracer_com%isc, ie=g_tracer_com%iec,&
+                  js=g_tracer_com%jsc, je=g_tracer_com%jec)
+             !This does temp_array=conv
+             !*BC_struc%bc(flux_gas_ind)%field(ind_flux)%values
+
              kw_array = kw_array+temp_array
+
+             ! Xiaohui
+             temp_array=0.0
+             kw_asym_array=0.0
+             call extract_coupler_values(BC_struc  =IOB_struc, &
+                  BC_index  =g_tracer%flux_gas_ind,    &
+                  BC_element=ind_kw_asym,                   &
+                  array_out =temp_array,               &
+                  conversion=1.0,                      &
+                  ilb=g_tracer_com%isd,jlb=g_tracer_com%jsd,& !lower bounds of array_out
+                  is=g_tracer_com%isc, ie=g_tracer_com%iec,&
+                  js=g_tracer_com%jsc, je=g_tracer_com%jec)
+             !This does temp_array=conv
+             !*BC_struc%bc(flux_gas_ind)%field(ind_flux)%values
+
+             kw_asym_array = kw_asym_array+temp_array
+
+/rray=0.0
+             u10_array=0.0
+             call extract_coupler_values(BC_struc  =IOB_struc, &
+                  BC_index  =g_tracer%flux_gas_ind,    &
+                  BC_element=ind_out1,                  &
+                  array_out =temp_array,               &
+                  conversion=1.0,                      &
+                  ilb=g_tracer_com%isd,jlb=g_tracer_com%jsd,& !lower bounds of array_out
+                  is=g_tracer_com%isc, ie=g_tracer_com%iec,&
+                  js=g_tracer_com%jsc, je=g_tracer_com%jec)
+             !This does temp_array=conv
+             !*BC_struc%bc(flux_gas_ind)%field(ind_flux)%values
+
+             u10_array = u10_array+temp_array
+
+             temp_array=0.0
+             ust_array=0.0
+             call extract_coupler_values(BC_struc  =IOB_struc, &
+                  BC_index  =g_tracer%flux_gas_ind,    &
+                  BC_element=ind_out2,                  &
+                  array_out =temp_array,               &
+                  conversion=1.0,                      &
+                  ilb=g_tracer_com%isd,jlb=g_tracer_com%jsd,& !lower bounds of array_out
+                  is=g_tracer_com%isc, ie=g_tracer_com%iec,&
+                  js=g_tracer_com%jsc, je=g_tracer_com%jec)
+             !This does temp_array=conv
+             !*BC_struc%bc(flux_gas_ind)%field(ind_flux)%values
+
+             ust_array = ust_array+temp_arraybin/bash: bgr_prustogi: command not found
           endif
           
        endif
@@ -1548,6 +1680,11 @@ contains
              call g_tracer_set_values(g_tracer,g_tracer%name,'deltap',deltap_array,&
                   g_tracer_com%isd,g_tracer_com%jsd, weight)
              call g_tracer_set_values(g_tracer,g_tracer%name,'kw',kw_array,&
+             call g_tracer_set_values(g_tracer,g_tracer%name,'kw_asym',kw_asym_array,& !Xiaohui
+                  g_tracer_com%isd,g_tracer_com%jsd, weight)   ! # bgr_prustogi
+             call g_tracer_set_values(g_tracer,g_tracer%name,'u10',u10_array,&
+                  g_tracer_com%isd,g_tracer_com%jsd, weight)
+             call g_tracer_set_values(g_tracer,g_tracer%name,'ust',ust_array,&
                   g_tracer_com%isd,g_tracer_com%jsd, weight)
           endif
        endif
@@ -1566,7 +1703,7 @@ contains
        g_tracer => g_tracer%next
     enddo
 
-    deallocate(temp_array, stf_array, stf_gas_array, deltap_array, kw_array)
+    deallocate(temp_array, stf_array, stf_gas_array, deltap_array, kw_array, kw_asym_array, u10_array, ust_array) ! prustogi
 
   end subroutine g_tracer_coupler_get
 
@@ -1786,7 +1923,13 @@ contains
        array_ptr => g_tracer%vdiff
     case ('vdiffuse_impl') 
        array_ptr => g_tracer%vdiffuse_impl
-    case default 
+    !liao
+    case ('vdiffusec_impl')
+       array_ptr => g_tracer%vdiffusec_impl
+    case ('boundary_forcing_tend')
+       array_ptr => g_tracer%boundary_forcing_tend
+    !liao 
+   case default 
        call mpp_error(FATAL, trim(sub_name)//": Not a known member variable: "//trim(member))   
     end select
 
@@ -1962,6 +2105,13 @@ contains
        array = g_tracer%deltap
     case ('kw') 
        array = g_tracer%kw
+    case ('kw_asym') ! Xiaohui
+       array_ptr => g_tracer%kw_asym
+    ! bgr_prustogi
+    case ('u10')
+       array_ptr => g_tracer%u10
+    case ('ust')
+       array_ptr => g_tracer%ust
     case ('btf') 
        array = g_tracer%btf
     case ('btm_reservoir') 
@@ -2093,19 +2243,26 @@ contains
        ! Check for edge case where the new value is a weighted combination of old and new values
        ! and the old value had runoff added to it later. In this case, the result would be
        ! invalid if the new value did not also have runoff added to it (which is not known).
-       if (w1 < 1 .and. g_tracer%runoff_added_to_stf) then
-         call mpp_error(FATAL, trim(sub_name)//&
-           ": Cannot set stf to a weighted combination of values with and without runoff.")
-       else     
+       !if (w1 < 1 .and. g_tracer%runoff_added_to_stf) then
+       !  call mpp_error(FATAL, trim(sub_name)//&
+       !    ": Cannot set stf to a weighted combination of values with and without runoff.")
+       !else     
          g_tracer%stf    = w0*g_tracer%stf + w1*array 
-         g_tracer%runoff_added_to_stf = .false.
-       endif
+       !  g_tracer%runoff_added_to_stf = .false.
+       !eindif
     case ('stf_gas') 
        g_tracer%stf_gas= w0*g_tracer%stf_gas + w1*array
     case ('deltap') 
        g_tracer%deltap = w0*g_tracer%deltap + w1*array
     case ('kw') 
        g_tracer%kw     = w0*g_tracer%kw + w1*array
+    case ('kw_asym') !Xiaohui
+       g_tracer%kw_asym        = value
+    ! # bgr_prustogi
+    case ('u10')
+       g_tracer%u10        = value
+    case ('ust')
+       g_tracer%ust        = value
     case ('btf') 
        g_tracer%btf    = w0*g_tracer%btf + w1*array
     case ('btm_reservoir') 
@@ -2167,6 +2324,12 @@ contains
        g_tracer%vdiff  = array 
     case ('vdiffuse_impl') 
        g_tracer%vdiffuse_impl  = array 
+    !liao
+    case ('vdiffusec_impl')
+       array(:,:,:) = g_tracer%vdiffusec_impl(:,:,:)
+    case ('boundary_forcing_tend')
+       array(:,:,:) = g_tracer%boundary_forcing_tend(:,:,:)
+    !liao
     case default 
        call mpp_error(FATAL, trim(sub_name)//": Not a known member variable: "//trim(member))   
     end select
@@ -2251,6 +2414,13 @@ contains
        g_tracer%deltap    = value 
     case ('kw') 
        g_tracer%kw        = value 
+    case ('kw_asym')
+       array = g_tracer%kw_asym !Xiaohui
+    ! # bgr_prustogi
+    case ('u10')
+       g_tracer%u10        = value
+    case ('ust')
+       g_tracer%ust        = value
     case ('btf') 
        g_tracer%btf       = value 
     case ('trunoff') 
@@ -2794,6 +2964,29 @@ contains
                ie_in=g_tracer_com%iec, je_in=g_tracer_com%jec, ke_in=g_tracer_com%nk)
        endif
 
+       !liao
+       if (g_tracer%diag_id_vdiffuse_impl .gt. 0.and._ALLOCATED(g_tracer%vdiffuse_impl)) then
+          used =g_send_data(g_tracer%diag_id_vdiffuse_impl,g_tracer%vdiffuse_impl(:,:,:),model_time,&
+               rmask = g_tracer_com%grid_tmask(:,:,:),&
+               is_in=g_tracer_com%isc, js_in=g_tracer_com%jsc, ks_in=1,&
+               ie_in=g_tracer_com%iec,je_in=g_tracer_com%jec,ke_in=g_tracer_com%nk)
+       endif
+
+       if (g_tracer%diag_id_vdiffusec_impl .gt. 0.and._ALLOCATED(g_tracer%vdiffusec_impl)) then
+          used =g_send_data(g_tracer%diag_id_vdiffusec_impl,g_tracer%vdiffusec_impl(:,:,:),model_time,&
+               rmask = g_tracer_com%grid_tmask(:,:,:),&
+               is_in=g_tracer_com%isc, js_in=g_tracer_com%jsc, ks_in=1,&
+               ie_in=g_tracer_com%iec,je_in=g_tracer_com%jec,ke_in=g_tracer_com%nk)
+       endif
+
+       if (g_tracer%diag_id_boundary_forcing_tend .gt. 0.and._ALLOCATED(g_tracer%boundary_forcing_tend)) then
+          used =g_send_data(g_tracer%diag_id_boundary_forcing_tend,g_tracer%boundary_forcing_tend(:,:,:),model_time,&
+               rmask = g_tracer_com%grid_tmask(:,:,:),&
+               is_in=g_tracer_com%isc, js_in=g_tracer_com%jsc, ks_in=1,&
+               ie_in=g_tracer_com%iec,je_in=g_tracer_com%jec,ke_in=g_tracer_com%nk)
+       endif
+     ! liao
+
        if (g_tracer%diag_id_aux .gt. 0) then
           used = g_send_data(g_tracer%diag_id_aux, g_tracer%tendency(:,:,:), model_time,&
                rmask = g_tracer_com%grid_tmask(:,:,:),& 
@@ -2825,6 +3018,28 @@ contains
        if (g_tracer%diag_id_kw .gt. 0 .and. _ALLOCATED(g_tracer%kw)) then
           used = g_send_data(g_tracer%diag_id_kw, g_tracer%kw(:,:), model_time,&
                rmask = g_tracer_com%grid_tmask(:,:,1),& 
+               is_in=g_tracer_com%isc, js_in=g_tracer_com%jsc,&
+               ie_in=g_tracer_com%iec, je_in=g_tracer_com%jec )
+       endif
+
+       ! Xiaohui
+       if (g_tracer%diag_id_kw_asym .gt. 0 .and. _ALLOCATED(g_tracer%kw_asym)) then
+          used = g_send_data(g_tracer%diag_id_kw_asym, g_tracer%kw_asym(:,:),model_time,&
+               rmask = g_tracer_com%grid_tmask(:,:,1),&
+               is_in=g_tracer_com%isc, js_in=g_tracer_com%jsc,&
+               ie_in=g_tracer_com%iec, je_in=g_tracer_com%jec )
+       endif
+       ! # bgr_prustogi
+       if (g_tracer%diag_id_u10 .gt. 0 .and. _ALLOCATED(g_tracer%u10)) then
+          used = g_send_data(g_tracer%diag_id_u10,g_tracer%u10(:,:),model_time,&
+               rmask = g_tracer_com%grid_tmask(:,:,1),&
+               is_in=g_tracer_com%isc, js_in=g_tracer_com%jsc,&
+               ie_in=g_tracer_com%iec, je_in=g_tracer_com%jec )
+       endif
+
+       if (g_tracer%diag_id_ust .gt. 0 .and. _ALLOCATED(g_tracer%ust)) then
+          used = g_send_data(g_tracer%diag_id_ust,g_tracer%ust(:,:),model_time,&
+               rmask = g_tracer_com%grid_tmask(:,:,1),&
                is_in=g_tracer_com%isc, js_in=g_tracer_com%jsc,&
                ie_in=g_tracer_com%iec, je_in=g_tracer_com%jec )
        endif
@@ -2947,6 +3162,23 @@ contains
                is_in=g_tracer_com%isc, js_in=g_tracer_com%jsc, ks_in=1,&
                ie_in=g_tracer_com%iec, je_in=g_tracer_com%jec, ke_in=g_tracer_com%nk)
        endif
+
+       !liao
+       if (g_tracer%diag_id_vdiffusec_impl .gt. 0 .and._ALLOCATED(g_tracer%vdiffusec_impl)) then
+          used =g_send_data(g_tracer%diag_id_vdiffusec_impl,g_tracer%vdiffusec_impl(:,:,:),model_time,&
+               rmask = g_tracer_com%grid_tmask(:,:,:),&
+               is_in=g_tracer_com%isc, js_in=g_tracer_com%jsc, ks_in=1,&
+               ie_in=g_tracer_com%iec,je_in=g_tracer_com%jec,ke_in=g_tracer_com%nk)
+       endif
+
+       if (g_tracer%diag_id_boundary_forcing_tend .gt.0.and._ALLOCATED(g_tracer%boundary_forcing_tend)) then
+          used =g_send_data(g_tracer%diag_id_boundary_forcing_tend,g_tracer%boundary_forcing_tend(:,:,:),model_time,&
+               rmask = g_tracer_com%grid_tmask(:,:,:),&
+               is_in=g_tracer_com%isc, js_in=g_tracer_com%jsc, ks_in=1,&
+               ie_in=g_tracer_com%iec,je_in=g_tracer_com%jec,ke_in=g_tracer_com%nk)
+       endif
+       !liao
+
 
        !traverse the linked list till hit NULL
        if(.NOT. associated(g_tracer%next)) exit
@@ -3138,12 +3370,14 @@ contains
     !   Save the current state for calculation of the implicit vertical diffusion term
     !
 
-    if (g_tracer%diag_id_vdiffuse_impl .gt. 0) then
+    !if (g_tracer%diag_id_vdiffuse_impl .gt. 0) then !liao comment
+    if (g_tracer%diag_id_vdiffuse_impl .gt. 0 .or. g_tracer%diag_id_vdiffusec_impl .gt. 0) then !liao added
       if (present(mom)) then
         do_diagnostic = .not. mom
       else
         do_diagnostic = .false.
       endif
+      do_diagnostic = .true. !liao turn on diagnostic
     else
       do_diagnostic = .false.
     endif
@@ -3258,8 +3492,15 @@ contains
       do j = g_tracer_com%jsc, g_tracer_com%jec
          do i = g_tracer_com%isc, g_tracer_com%iec
             do k = 1, g_tracer_com%nk
-               g_tracer%vdiffuse_impl(i,j,k) = g_tracer_com%grid_tmask(i,j,k) *   &
-                    (g_tracer%field(i,j,k,tau) - g_tracer%vdiffuse_impl(i,j,k)) / dt
+               !liao let h_old into vdiffuse and this term is content tendency
+               g_tracer%vdiffusec_impl(i,j,k) = g_tracer_com%grid_tmask(i,j,k) *&
+                    (g_tracer%field(i,j,k,tau) - g_tracer%vdiffuse_impl(i,j,k))/dt
+               g_tracer%vdiffuse_impl(i,j,k) =h_old(i,j,k)*g_tracer_com%grid_tmask(i,j,k) *   &
+                    (g_tracer%field(i,j,k,tau) - g_tracer%vdiffuse_impl(i,j,k))/dt
+               !g_tracer%vdiffuse_impl(i,j,k) = g_tracer_com%grid_tmask(i,j,k) *
+               !& !liao comment
+               !     (g_tracer%field(i,j,k,tau) - g_tracer%vdiffuse_impl(i,j,k))
+               !     / dt !liao comment            
             enddo
          enddo
       enddo

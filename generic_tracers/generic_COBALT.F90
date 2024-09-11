@@ -1282,7 +1282,6 @@ namelist /generic_COBALT_nml/ do_14c, co2_calc, debug, do_nh3_atm_ocean_exchange
           id_f_po4_int_100  = -1, &
           id_f_sio4_int_100 = -1, &
           id_jo2_plus_btm   = -1, &
-          id_jo2_plus_btmc  = -1, &  !liao
           id_jo2            = -1, & !liao
           id_jo2c           = -1, & !liao
           id_jalk_100       = -1, &
@@ -5300,7 +5299,7 @@ write (stdlogunit, generic_COBALT_nml)
         call g_tracer_add_param('a3_o2', cobalt%a3_o2, 3.116)
         call g_tracer_add_param('a4_o2', cobalt%a4_o2, -0.0306)
         call g_tracer_add_param('a5_o2', cobalt%a5_o2, 0.0)       ! Not used for W92
-        if (is_root_pe()) call mpp_error(NOTE,'generic_cobalt: Using Schmidt number coefficients for W92')
+!        if (is_root_pe()) call mpp_error(NOTE,'generic_cobalt: Using Schmidt number coefficients for W92')
     else if ((trim(as_param_cobalt) == 'W14') .or. (trim(as_param_cobalt) == 'gfdl_cmip6')) then
         !  Compute the Schmidt number of CO2 in seawater using the 
         !  formulation presented by Wanninkhof 
@@ -5318,7 +5317,7 @@ write (stdlogunit, generic_COBALT_nml)
         call g_tracer_add_param('a3_o2', cobalt%a3_o2, 5.2122)
         call g_tracer_add_param('a4_o2', cobalt%a4_o2, -0.10939)
         call g_tracer_add_param('a5_o2', cobalt%a5_o2, 0.00093777)
-        if (is_root_pe()) call mpp_error(NOTE,'generic_cobalt: Using Schmidt number coefficients for W14')
+!        if (is_root_pe()) call mpp_error(NOTE,'generic_cobalt: Using Schmidt number coefficients for W14')
     else
         call mpp_error(FATAL,'generic_cobalt: unable to set Schmidt number coefficients for as_param '//trim(as_param_cobalt))
     endif
@@ -7890,14 +7889,10 @@ write (stdlogunit, generic_COBALT_nml)
     ! sjd
        if (grid_kmt(i,j) .gt. 0) then !{
           !
-          ! Calculate the values of tracers influencing the sedimentary
-          ! transformations
-          ! and fluxes over a layer defined by "bottom_thickess".  The default
-          ! is 1m. This
-          ! replaces the old approach with MOM4/5 that used the bottom layer
-          ! since the 
-          ! bottom layers in MOM6 are usually "vanished" layers that are 1
-          ! micron thick
+          ! Calculate the values of tracers influencing the sedimentary transformations
+          ! and fluxes over a layer defined by "bottom_thickess".  The defaut is 1m. This
+          ! replaces the old approach with MOM4/5 that used the bottom layer since the 
+          ! bottom layers in MOM6 are usually "vanished" layers that are 1 micron thick
           !
           rho_dzt_bot(i,j) = 0.0
           cobalt%btm_o2(i,j) = 0.0
@@ -7931,8 +7926,7 @@ write (stdlogunit, generic_COBALT_nml)
           cobalt%btm_no3(i,j)=cobalt%btm_no3(i,j)/(cobalt%bottom_thickness*cobalt%Rho_0)
           cobalt%btm_co3_sol_calc(i,j)=cobalt%btm_co3_sol_calc(i,j)/(cobalt%bottom_thickness*cobalt%Rho_0)
           cobalt%btm_co3_ion(i,j)=cobalt%btm_co3_ion(i,j)/(cobalt%bottom_thickness*cobalt%Rho_0)
-          ! calculate the saturation state with respect to calcite for
-          ! subsequent calculations
+          ! calculate the saturation state with respect to calcite for subsequent calculations
           cobalt%btm_omega_calc(i,j)=cobalt%btm_co3_ion(i,j)/cobalt%btm_co3_sol_calc(i,j)
    ! sjd    
 
@@ -7955,10 +7949,10 @@ write (stdlogunit, generic_COBALT_nml)
              ! to prevent anomalous extrapolation of the relationship
              ! sjd change to log10, hopefully in main by next merge
              log_fpoc_btm = log10(min(43.0,0.1*fpoc_btm))
-             cobalt%fno3denit_sed(i,j) = min(cobalt%btm_no3(i,j,k)*cobalt%Rho_0*r_dt,  &      
+             cobalt%fno3denit_sed(i,j) = min(cobalt%btm_no3(i,j)*cobalt%Rho_0*r_dt,  &      
                   min((cobalt%f_ndet_btf(i,j,1)-cobalt%fndet_burial(i,j))*cobalt%n_2_n_denit, & 
                   10.0**(-0.9543+0.7662*log10_fpoc_btm - 0.235*log10_fpoc_btm**2.0)/(cobalt%c_2_n*sperd*100.0)* &
-                  cobalt%n_2_n_denit*cobalt%btm_no3(i,j,k)/(cobalt%k_no3_denit + cobalt%btm_no3(i,j,k)))) * &
+                  cobalt%n_2_n_denit*cobalt%btm_no3(i,j)/(cobalt%k_no3_denit + cobalt%btm_no3(i,j)))) * &
                   cobalt%zt(i,j,k) / (cobalt%z_burial + cobalt%zt(i,j,k))
              ! uncomment "no mass change" test 
              !cobalt%fno3denit_sed(i,j) = 0.0             
@@ -8935,7 +8929,7 @@ write (stdlogunit, generic_COBALT_nml)
 ! CAS: fixed parentheses to not include jpo4 as in jnh4 example above
           cobalt%jpo4_plus_btm(i,j,k)  = cobalt%jpo4(i,j,k) + (cobalt%f_pdet_btf(i,j,1) - cobalt%fpdet_burial(i,j)) / rho_dzt_bot(i,j) ! sjd     
 
-          cobalt%jsio4_plus_btm(i,j,k) = cobalt%jsio4(i,j,k) + cobalt%f_sidet_btf(i,j,1) / rho_dzt(i,j,k)   
+          cobalt%jsio4_plus_btm(i,j,k) = cobalt%jsio4(i,j,k) + cobalt%f_sidet_btf(i,j,1) / rho_dzt_botm(i,j,k) ! sjd   
 
           cobalt%jdin_plus_btm(i,j,k)  = cobalt%jno3_plus_btm(i,j,k) + cobalt%jnh4_plus_btm(i,j,k) 
           
@@ -9355,10 +9349,8 @@ write (stdlogunit, generic_COBALT_nml)
     enddo; enddo  !} i, j
 
     ! sjd
-    ! Calculate the bottom layer over a thickness defined by
-    ! cobalt%bottom_thickness
-    ! rather than the bottom-most layer as in MOM4/5.  This avoids numerical
-    ! issues
+    ! Calculate the bottom layer over a thickness defined by cobalt%bottom_thickness
+    ! rather than the bottom-most layer as in MOM4/5.  This avoids numerical issues
     ! generated in "vanishing" layers that overlie the benthos in most regions.  
     do j = jsc, jec ; do i = isc, iec  !{
        rho_dzt_bot(i,j) = 0.0

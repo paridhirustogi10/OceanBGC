@@ -237,7 +237,10 @@ contains
          prog       = .true.,              &
          flux_gas       = .true.,                      &
          flux_gas_type  = 'air_sea_gas_flux_generic',                  &
-         flux_gas_param = (/ 9.36e-07, 9.7561e-06 /), &
+         !flux_gas_param = (/ 9.36e-07, 9.7561e-06 /), &
+         flux_gas_param = (/ 6.97e-07, 9.7561e-06 /), &
+         ! 9.36e-7 is value in esm2; it should be 6.97e-7 (0.251*0.01/3600) in
+         ! esm4; liao         
          flux_gas_restart_file  = 'ocmip_argon_airsea_flux.res.nc' )
 
 
@@ -361,7 +364,7 @@ contains
 
     do j=jsc,jec ; do i=isc,iec
        !This calculation needs an input of SST and SSS
-       ta = (ST(i,j) + 273.15) * 0.01 ! Why is this in dekaKelvin?
+       ta = (ST(i,j) + 273.15) * 0.01 ! Why is this in dekaKelvin? !prustogi_update - should be SST?
        sal = SSS(i,j) ; SST = ST(i,j)
 
        !---------------------------------------------------------------------
