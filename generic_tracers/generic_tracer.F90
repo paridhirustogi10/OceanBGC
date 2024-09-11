@@ -173,6 +173,8 @@ contains
       if (do_generic_SF6)     as_param_sf6     = as_param
       if (do_generic_BLING)   as_param_bling   = as_param
       if (do_generic_COBALT)  as_param_cobalt  = as_param
+    else !liao added
+      call mpp_error(FATAL,'generic_tracer.F90/generic_cobalt_register: unable to set Schmidt number coefficients for as_param (gfdl_cmip6, W14, W92)'//trim(as_param))  !liao added
     endif
 
     call read_mocsy_namelist()

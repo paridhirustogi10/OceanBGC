@@ -146,7 +146,7 @@ module generic_COBALT
   use g_tracer_utils, only : g_tracer_get_values  
   use g_tracer_utils, only : g_diag_type, g_diag_field_add
   use g_tracer_utils, only : register_diag_field=>g_register_diag_field
-  use g_tracer_utils, only : g_send_data, is_root_pe
+  use g_tracer_utils, only : g_send_data ! sjd
 
   use FMS_ocmip2_co2calc_mod, only : FMS_ocmip2_co2calc, CO2_dope_vector
 
@@ -202,7 +202,7 @@ module generic_COBALT
   real    :: irr_inhibit = 10.
   real    :: gamma_nitrif= 3.5e6 !month(-1)
   real    :: k_nh3_nitrif= 3.1e-9 !mol/kg
-  real    :: imbalance_tolerance=1.0e-10 !the tolerance for non-conservation in C,N,P,Sc,Fe
+  real    :: imbalance_tolerance=1.0e-9 !the tolerance for non-conservation in C,N,P,Sc,Fe
 
   integer :: scheme_no3_nh4_lim = 2 !1-Frost and Franzen (1992)
                                     !2-O'Neill
@@ -626,6 +626,7 @@ namelist /generic_COBALT_nml/ do_14c, co2_calc, debug, do_nh3_atm_ocean_exchange
           lysis_phi_srdop,  &
           lysis_phi_sldop,  &
           wsink,            &
+          bottom_thickness, & ! sjd
           z_sed,            &
           zeta,             &
           refuge_conc,      &
@@ -877,10 +878,15 @@ namelist /generic_COBALT_nml/ do_14c, co2_calc, debug, do_nh3_atm_ocean_exchange
           flithdet_100, &
           btm_temp,     &
           btm_o2,       &
+          btm_no3,      &  ! sjd
+          btm_alk,       & ! sjd
+          btm_dic,       & ! sjd
           btm_htotal,   &
           btm_co3_ion,  &
           btm_co3_sol_arag, &
           btm_co3_sol_calc, &
+          btm_omega_calc, & ! sjd
+          btm_omega_arag, & ! sjd
           cased_2d,     &
           o2min, & 
           z_o2min, & 
@@ -1051,6 +1057,7 @@ namelist /generic_COBALT_nml/ do_14c, co2_calc, debug, do_nh3_atm_ocean_exchange
           id_pdet_btf      = -1,       & 
           id_sidet_btf     = -1,       &
           id_jfed          = -1,       &
+          id_jfedc         = -1,       & !liao
           id_jprod_ndet    = -1,       &
           id_jprod_pdet    = -1,       &
           id_jprod_sldon   = -1,       &
@@ -1102,8 +1109,13 @@ namelist /generic_COBALT_nml/ do_14c, co2_calc, debug, do_nh3_atm_ocean_exchange
           id_irr_inst      = -1,       &
           id_irr_mix       = -1,       &
           id_jalk          = -1,       & 
+          id_jalkc         = -1,       &  !liao 
           id_jalk_plus_btm = -1,       & 
-          id_jdic          = -1,       & 
+          id_jdic          = -1,       &   
+          id_jdicc         = -1,       &  !liao           
+          id_jno3c         = -1,       &  !liao 
+          id_jpo4c         = -1,       &  !liao 
+          id_jsio4c        = -1,       &  !liao 
           id_jdic_plus_btm = -1,       & 
           id_jnh4          = -1,       & 
           id_jndet         = -1,       & 
@@ -1168,6 +1180,9 @@ namelist /generic_COBALT_nml/ do_14c, co2_calc, debug, do_nh3_atm_ocean_exchange
           id_sfc_temp      = -1,       &
           id_btm_temp      = -1,       &
           id_btm_o2        = -1,       &
+          id_btm_no3       = -1,       & ! sjd
+          id_btm_alk       = -1,       & ! sjd
+          id_btm_dic       = -1,       & ! sjd
           id_btm_htotal    = -1,       &
           id_btm_co3_sol_arag = -1,    &
           id_btm_co3_sol_calc = -1,    &
@@ -1176,6 +1191,8 @@ namelist /generic_COBALT_nml/ do_14c, co2_calc, debug, do_nh3_atm_ocean_exchange
           id_sfc_co3_ion   = -1,       &
           id_sfc_co3_sol_arag = -1,    &
           id_sfc_co3_sol_calc = -1,    &
+          id_btm_omega_calc   = -1,    & ! sjd
+          id_btm_omega_arag   = -1,    & ! sjd
           id_runoff_flux_alk = -1,     &
           id_runoff_flux_dic = -1,     &
           id_runoff_flux_di14c = -1,     &
@@ -1265,6 +1282,9 @@ namelist /generic_COBALT_nml/ do_14c, co2_calc, debug, do_nh3_atm_ocean_exchange
           id_f_po4_int_100  = -1, &
           id_f_sio4_int_100 = -1, &
           id_jo2_plus_btm   = -1, &
+          id_jo2_plus_btmc  = -1, &  !liao
+          id_jo2            = -1, & !liao
+          id_jo2c           = -1, & !liao
           id_jalk_100       = -1, &
           id_jdic_100       = -1, &
           id_jdin_100       = -1, &
@@ -2589,6 +2609,12 @@ write (stdlogunit, generic_COBALT_nml)
     cobalt%id_jfed = register_diag_field(package_name, vardesc_temp%name, axes(1:3),&
          init_time, vardesc_temp%longname,vardesc_temp%units, missing_value = missing_value1)
 
+    !liao
+    vardesc_temp = vardesc("jfedc","Dissolved Iron Change concentration",'h','L','s','mol Fe m-2 s-1','f')
+    cobalt%id_jfedc = register_diag_field(package_name, vardesc_temp%name, axes(1:3),&
+         init_time, vardesc_temp%longname,vardesc_temp%units, missing_value = missing_value1)
+    !liao
+
     vardesc_temp = vardesc("jfe_ads","Iron adsorption layer integral",'h','L','s','mol Fe m-2 s-1','f')
     cobalt%id_jfe_ads = register_diag_field(package_name, vardesc_temp%name, axes(1:3),&
          init_time, vardesc_temp%longname,vardesc_temp%units, missing_value = missing_value1)
@@ -3028,6 +3054,20 @@ write (stdlogunit, generic_COBALT_nml)
     vardesc_temp = vardesc("btm_o2","Bottom Oxygen",'h','1','s','mol kg-1','f')
     cobalt%id_btm_o2 = register_diag_field(package_name, vardesc_temp%name, axes(1:2),&
          init_time, vardesc_temp%longname,vardesc_temp%units, missing_value = missing_value1)
+    
+    ! samjd
+    vardesc_temp = vardesc("btm_no3","Bottom NO3",'h','1','s','mol kg-1','f')
+    cobalt%id_btm_no3 = register_diag_field(package_name, vardesc_temp%name,axes(1:2),&
+         init_time, vardesc_temp%longname,vardesc_temp%units, missing_value =missing_value1)
+
+    vardesc_temp = vardesc("btm_alk","Bottom Alkalinity",'h','1','s','eq kg-1','f')
+    cobalt%id_btm_alk = register_diag_field(package_name, vardesc_temp%name, axes(1:2),&
+          init_time, vardesc_temp%longname,vardesc_temp%units, missing_value = missing_value1)
+
+    vardesc_temp = vardesc("btm_dic","Bottom Dissolved Inorganic Carbon",'h','1','s','mol kg-1','f')
+    cobalt%id_btm_dic = register_diag_field(package_name, vardesc_temp%name, axes(1:2),&
+         init_time, vardesc_temp%longname,vardesc_temp%units, missing_value =missing_value1)
+    ! samjd
 
     vardesc_temp = vardesc("btm_htotal","Bottom Htotal",'h','1','s','mol kg-1','f')
     cobalt%id_btm_htotal = register_diag_field(package_name, vardesc_temp%name, axes(1:2),&
@@ -3044,6 +3084,16 @@ write (stdlogunit, generic_COBALT_nml)
     vardesc_temp = vardesc("btm_co3_sol_calc","Bottom Calcite Solubility",'h','1','s','mol kg-1','f')
     cobalt%id_btm_co3_sol_calc = register_diag_field(package_name, vardesc_temp%name, axes(1:2),&
          init_time, vardesc_temp%longname,vardesc_temp%units, missing_value = missing_value1)
+
+    ! samjd
+    vardesc_temp = vardesc("btm_omega_arag","Bottom saturation state for aragonite",'h','1','s','none','f')
+    cobalt%id_btm_omega_arag = register_diag_field(package_name, vardesc_temp%name, axes(1:2),&
+         init_time, vardesc_temp%longname,vardesc_temp%units, missing_value = missing_value1)
+
+    vardesc_temp = vardesc("btm_omega_calc","Bottom saturation state for calcite",'h','1','s','none','f')
+    cobalt%id_btm_omega_calc = register_diag_field(package_name,vardesc_temp%name, axes(1:2),&
+         init_time, vardesc_temp%longname,vardesc_temp%units, missing_value = missing_value1)
+    ! samjd
 
     vardesc_temp = vardesc("cased_2d","calcium carbonite in sediment",'h','1','s','mol m-3','f')
     cobalt%id_cased_2d = register_diag_field(package_name, vardesc_temp%name, axes(1:2),&
@@ -3639,6 +3689,12 @@ write (stdlogunit, generic_COBALT_nml)
     cobalt%id_jalk = register_diag_field(package_name, vardesc_temp%name, axes(1:3),&
          init_time, vardesc_temp%longname,vardesc_temp%units, missing_value = missing_value1)
 
+    !liao
+    vardesc_temp = vardesc("jalkc","Alkalinity source layer concentration",'h','L','s','eq m-3 s-1','f')
+    cobalt%id_jalkc = register_diag_field(package_name, vardesc_temp%name,axes(1:3),&
+         init_time, vardesc_temp%longname,vardesc_temp%units, missing_value =missing_value1)
+    !liao
+
     vardesc_temp = vardesc("jalk_plus_btm","Alkalinity source plus btm layer integral",'h','L','s','eq m-2 s-1','f')
     cobalt%id_jalk_plus_btm = register_diag_field(package_name, vardesc_temp%name, axes(1:3),&
          init_time, vardesc_temp%longname,vardesc_temp%units, missing_value = missing_value1)
@@ -3646,6 +3702,24 @@ write (stdlogunit, generic_COBALT_nml)
     vardesc_temp = vardesc("jdic","Dissolved Inorganic Carbon source layer integral",'h','L','s','mol m-2 s-1','f')
     cobalt%id_jdic = register_diag_field(package_name, vardesc_temp%name, axes(1:3),&
          init_time, vardesc_temp%longname,vardesc_temp%units, missing_value = missing_value1)
+
+    !liao
+    vardesc_temp = vardesc("jdicc","Dissolved Inorganic Carbon source concentration",'h','L','s','mol m-2 s-1','f')
+    cobalt%id_jdicc = register_diag_field(package_name, vardesc_temp%name,axes(1:3),&
+         init_time, vardesc_temp%longname,vardesc_temp%units, missing_value =missing_value1)
+
+    vardesc_temp = vardesc("jno3c","no3 source concentration",'h','L','s','mol m-2 s-1','f')
+    cobalt%id_jno3c = register_diag_field(package_name, vardesc_temp%name, axes(1:3),&
+         init_time, vardesc_temp%longname,vardesc_temp%units, missing_value =missing_value1)
+
+    vardesc_temp = vardesc("jpo4c","po4 source concentration",'h','L','s','mol m-2 s-1','f')
+    cobalt%id_jpo4c = register_diag_field(package_name, vardesc_temp%name, axes(1:3),&
+         init_time, vardesc_temp%longname,vardesc_temp%units, missing_value = missing_value1)
+
+    vardesc_temp = vardesc("jsio4c","sio4 source concentration",'h','L','s','mol m-2 s-1','f')
+    cobalt%id_jsio4c = register_diag_field(package_name, vardesc_temp%name, axes(1:3),&
+         init_time, vardesc_temp%longname,vardesc_temp%units, missing_value = missing_value1)   
+    !liao
 
     vardesc_temp = vardesc("jdic_plus_btm","Dissolved Inorganic Carbon source plus btm layer integral",'h','L','s','mol m-2 s-1','f')
     cobalt%id_jdic_plus_btm = register_diag_field(package_name, vardesc_temp%name, axes(1:3),&
@@ -3666,6 +3740,16 @@ write (stdlogunit, generic_COBALT_nml)
     vardesc_temp = vardesc("jo2_plus_btm","O2 source plus btm layer integral",'h','L','s','mol m-2 s-1','f')
     cobalt%id_jo2_plus_btm = register_diag_field(package_name, vardesc_temp%name, axes(1:3),&
          init_time, vardesc_temp%longname,vardesc_temp%units, missing_value = missing_value1)
+    
+    ! liao
+    vardesc_temp = vardesc("jo2","O2 source concentration",'h','L','s','mol m-3 s-1','f')
+    cobalt%id_jo2 = register_diag_field(package_name, vardesc_temp%name,axes(1:3),&
+         init_time, vardesc_temp%longname,vardesc_temp%units, missing_value =missing_value1)
+
+    vardesc_temp = vardesc("jo2c","O2 source concentration",'h','L','s','mol m-3 s-1','f')
+    cobalt%id_jo2c = register_diag_field(package_name, vardesc_temp%name,axes(1:3),&
+         init_time, vardesc_temp%longname,vardesc_temp%units, missing_value =missing_value1)
+    ! liao
 
 !==============================================================================================================
 ! 2016/07/05 jgj register and send temperature as a test
@@ -5578,6 +5662,7 @@ write (stdlogunit, generic_COBALT_nml)
     call g_tracer_add_param('gamma_sidet',  cobalt%gamma_sidet, cobalt%wsink / 1.0e4 )       ! s-1
     call g_tracer_add_param('phi_lith' ,  cobalt%phi_lith, 0.002)                            ! dimensionless 
     call g_tracer_add_param('k_lith',  cobalt%k_lith, 0.5/spery )                            ! s-1
+    call g_tracer_add_param('bottom_thickness',cobalt%bottom_thickness, 1.0 )                ! m
     call g_tracer_add_param('z_sed',  cobalt%z_sed, 0.1 )                                    ! m
     call g_tracer_add_param('k_no3_denit',cobalt%k_no3_denit,1.0e-6)                         ! mol NO3 kg-1
     call g_tracer_add_param('z_burial',cobalt%z_burial,50.0)                                 ! m
@@ -6471,7 +6556,9 @@ write (stdlogunit, generic_COBALT_nml)
     real :: TK, PRESS, PKSPA, PKSPC
     real :: tmp_hblt, tmp_irrad, tmp_irrad_ML,tmp_opacity,tmp_mu_ML
     real :: drho_dzt
+    integer, dimension(:,:), Allocatable :: k_bot ! sjd
     real, dimension(:), Allocatable   :: tmp_irr_band
+    real, dimension(:,:), Allocatable :: rho_dzt_100, rho_dzt_200, rho_dzt_bot ! sjd
     real, dimension(:,:), Allocatable :: rho_dzt_100, rho_dzt_200
     real, dimension(:,:,:), Allocatable :: z_remin_ramp
     real,dimension(1:NUM_ZOO,1:NUM_PREY) :: ipa_matrix,pa_matrix,ingest_matrix
@@ -6480,7 +6567,7 @@ write (stdlogunit, generic_COBALT_nml)
     real,dimension(1:NUM_ZOO)  :: tot_prey
     real :: tot_prey_hp, sw_fac_denom, assim_eff
     real :: bact_uptake_ratio, vmax_bact, growth_ratio
-    real :: fpoc_btm, log_fpoc_btm
+    real :: fpoc_btm, log10_fpoc_btm ! sjd
     real :: fe_salt
     real :: sal,tt,tkb,ts,ts2,ts3,ts4,ts5
 
@@ -7796,12 +7883,64 @@ write (stdlogunit, generic_COBALT_nml)
     !     !cobalt%jfe_coast(i,j,k) = 0.0
     !enddo; enddo; enddo  !} i,j,k
 
+    allocate(rho_dzt_bot(isc:iec,jsc:jec))  ! sjd
+    allocate(k_bot(isc:iec,jsc:jec))        ! sjd
+
     do j = jsc, jec; do i = isc, iec  !{
-       k = grid_kmt(i,j)
-       if (k .gt. 0) then !{
+    ! sjd
+       if (grid_kmt(i,j) .gt. 0) then !{
+          !
+          ! Calculate the values of tracers influencing the sedimentary
+          ! transformations
+          ! and fluxes over a layer defined by "bottom_thickess".  The default
+          ! is 1m. This
+          ! replaces the old approach with MOM4/5 that used the bottom layer
+          ! since the 
+          ! bottom layers in MOM6 are usually "vanished" layers that are 1
+          ! micron thick
+          !
+          rho_dzt_bot(i,j) = 0.0
+          cobalt%btm_o2(i,j) = 0.0
+          cobalt%btm_no3(i,j) = 0.0
+          cobalt%btm_co3_sol_calc(i,j) = 0.0
+          cobalt%btm_co3_ion(i,j) = 0.0
+          cobalt%btm_omega_calc(i,j) = 0.0
+          k_bot(i,j) = 0
+          do k = grid_kmt(i,j),1,-1   !{
+            if (rho_dzt_bot(i,j).lt.(cobalt%Rho_0*cobalt%bottom_thickness)) then
+              k_bot(i,j) = k
+              rho_dzt_bot(i,j) = rho_dzt_bot(i,j) + rho_dzt(i,j,k)
+              cobalt%btm_o2(i,j) = cobalt%btm_o2(i,j) + &
+                cobalt%f_o2(i,j,k)*rho_dzt(i,j,k)
+              cobalt%btm_no3(i,j) = cobalt%btm_no3(i,j) + &
+                cobalt%f_no3(i,j,k)*rho_dzt(i,j,k)
+              cobalt%btm_co3_sol_calc(i,j) = cobalt%btm_co3_sol_calc(i,j) + &
+                cobalt%co3_sol_calc(i,j,k)*rho_dzt(i,j,k)
+              cobalt%btm_co3_ion(i,j) = cobalt%btm_co3_ion(i,j) + &
+                cobalt%f_co3_ion(i,j,k)*rho_dzt(i,j,k)
+            endif
+          enddo
+          ! subtract off overshoot
+          drho_dzt = rho_dzt_bot(i,j) - cobalt%Rho_0*cobalt%bottom_thickness
+          cobalt%btm_o2(i,j)=cobalt%btm_o2(i,j)-cobalt%f_o2(i,j,k_bot(i,j))*drho_dzt
+          cobalt%btm_no3(i,j)=cobalt%btm_no3(i,j)-cobalt%f_no3(i,j,k_bot(i,j))*drho_dzt
+          cobalt%btm_co3_sol_calc(i,j)=cobalt%btm_co3_sol_calc(i,j)-cobalt%co3_sol_calc(i,j,k_bot(i,j))*drho_dzt
+          cobalt%btm_co3_ion(i,j)=cobalt%btm_co3_ion(i,j)-cobalt%f_co3_ion(i,j,k_bot(i,j))*drho_dzt
+          ! convert back to moles kg-1
+          cobalt%btm_o2(i,j)=cobalt%btm_o2(i,j)/(cobalt%bottom_thickness*cobalt%Rho_0)
+          cobalt%btm_no3(i,j)=cobalt%btm_no3(i,j)/(cobalt%bottom_thickness*cobalt%Rho_0)
+          cobalt%btm_co3_sol_calc(i,j)=cobalt%btm_co3_sol_calc(i,j)/(cobalt%bottom_thickness*cobalt%Rho_0)
+          cobalt%btm_co3_ion(i,j)=cobalt%btm_co3_ion(i,j)/(cobalt%bottom_thickness*cobalt%Rho_0)
+          ! calculate the saturation state with respect to calcite for
+          ! subsequent calculations
+          cobalt%btm_omega_calc(i,j)=cobalt%btm_co3_ion(i,j)/cobalt%btm_co3_sol_calc(i,j)
+   ! sjd    
+
           !
           ! Nitrogen flux from the sediments
           ! 
+
+          k = grid_kmt(i,j) ! sjd
           if (cobalt%f_ndet_btf(i,j,1) .gt. 0.0) then !{
              ! fpoc_bottom in mmoles C m-2 day-1 for burial relationship
              fpoc_btm = cobalt%f_ndet_btf(i,j,1)*cobalt%c_2_n*sperd*1000.0
@@ -7814,23 +7953,26 @@ write (stdlogunit, generic_COBALT_nml)
              cobalt%fpdet_burial(i,j) = cobalt%frac_burial(i,j)*cobalt%f_pdet_btf(i,j,1)
              ! fpoc_bottom in micromoles C cm-2 day-1 for denitrification relationship, cap at 43
              ! to prevent anomalous extrapolation of the relationship
-             log_fpoc_btm = log(min(43.0,0.1*fpoc_btm))
-             cobalt%fno3denit_sed(i,j) = min(cobalt%f_no3(i,j,k)*cobalt%Rho_0*r_dt,  &      
+             ! sjd change to log10, hopefully in main by next merge
+             log_fpoc_btm = log10(min(43.0,0.1*fpoc_btm))
+             cobalt%fno3denit_sed(i,j) = min(cobalt%btm_no3(i,j,k)*cobalt%Rho_0*r_dt,  &      
                   min((cobalt%f_ndet_btf(i,j,1)-cobalt%fndet_burial(i,j))*cobalt%n_2_n_denit, & 
-                  10.0**(-0.9543+0.7662*log_fpoc_btm - 0.235*log_fpoc_btm**2.0)/(cobalt%c_2_n*sperd*100.0)* &
-                  cobalt%n_2_n_denit*cobalt%f_no3(i,j,k)/(cobalt%k_no3_denit + cobalt%f_no3(i,j,k)))) * &
+                  10.0**(-0.9543+0.7662*log10_fpoc_btm - 0.235*log10_fpoc_btm**2.0)/(cobalt%c_2_n*sperd*100.0)* &
+                  cobalt%n_2_n_denit*cobalt%btm_no3(i,j,k)/(cobalt%k_no3_denit + cobalt%btm_no3(i,j,k)))) * &
                   cobalt%zt(i,j,k) / (cobalt%z_burial + cobalt%zt(i,j,k))
              ! uncomment "no mass change" test 
              !cobalt%fno3denit_sed(i,j) = 0.0             
-             if (cobalt%f_o2(i,j,k) .gt. cobalt%o2_min) then  !{
-                cobalt%fnoxic_sed(i,j) = max(0.0, min(cobalt%f_o2(i,j,k)*cobalt%Rho_0*r_dt*(1.0/cobalt%o2_2_nh4), &
+             if (cobalt%btm_o2(i,j,k) .gt. cobalt%o2_min) then  !{
+                cobalt%fnoxic_sed(i,j) = max(0.0, min(cobalt%btm_o2(i,j)*cobalt%bottom_thickness* &
+                                         cobalt%Rho_0*r_dt*(1.0/cobalt%o2_2_nh4), &
                                          cobalt%f_ndet_btf(i,j,1) - cobalt%fndet_burial(i,j) - &
                                          cobalt%fno3denit_sed(i,j)/cobalt%n_2_n_denit))
              else
                 cobalt%fnoxic_sed(i,j) = 0.0
              endif !}
              cobalt%fno3denit_sed(i,j) = cobalt%fno3denit_sed(i,j) + &
-                                         min(cobalt%f_no3(i,j,k)*cobalt%Rho_0*r_dt-cobalt%fno3denit_sed(i,j), &
+                                         min(cobalt%btm_no3(i,j)*cobalt%bottom_thickness* & ! sjd
+                                         cobalt%Rho_0*r_dt-cobalt%fno3denit_sed(i,j),& ! sjd
                                          (cobalt%f_ndet_btf(i,j,1)-cobalt%fnoxic_sed(i,j)-cobalt%fndet_burial(i,j) - &
                                          cobalt%fno3denit_sed(i,j)/cobalt%n_2_n_denit)*cobalt%n_2_n_denit)
              cobalt%fnfeso4red_sed(i,j) = max(0.0, cobalt%f_ndet_btf(i,j,1)-cobalt%fnoxic_sed(i,j)- &
@@ -7845,7 +7987,7 @@ write (stdlogunit, generic_COBALT_nml)
           !cobalt%ffe_sed(i,j) = cobalt%fe_2_n_sed * cobalt%f_ndet_btf(i,j,1)
           ! iron from sediment (Dale)
           cobalt%ffe_sed(i,j) = cobalt%ffe_sed_max * tanh( (cobalt%f_ndet_btf(i,j,1)*cobalt%c_2_n*sperd*1.0e3)/ &
-                                max(cobalt%f_o2(i,j,k)*1.0e6,epsln) )
+                                max(cobalt%btm_o2(i,j)*1.0e6,epsln) )  ! sjd
 
           cobalt%ffe_geotherm(i,j) = cobalt%ffe_geotherm_ratio*internal_heat(i,j)*4184.0/dt
           ! default for icebergs: 40 nanomoles fe dissolved per kg of icemelt
@@ -7883,7 +8025,7 @@ write (stdlogunit, generic_COBALT_nml)
             cobalt%phi_surfresp_cased*cobalt%f_ndet_btf(i,j,1)*cobalt%c_2_n)
           ! Ca-specific dissolution coeficient, depends on calcite saturation state and is enhanced by
           ! respiration deep in the sediment (s-1), non-linearity controlled by alpha_cased
-          cobalt%cased_redis_coef(i,j) = cobalt%gamma_cased*max(0.0,1.0-cobalt%omega_calc(i,j,k)+ &
+          cobalt%cased_redis_coef(i,j) = cobalt%gamma_cased*max(0.0,1.0-cobalt%btm_omega_calc(i,j)+ & ! sjd
             cobalt%phi_deepresp_cased*cobalt%f_ndet_btf(i,j,1)*cobalt%c_2_n*spery)**cobalt%alpha_cased
           ! Effective thickness term that enhances burial of calcite when total sediment accumulation is high
           ! dimensionless value between 0 and 1
@@ -8738,45 +8880,60 @@ write (stdlogunit, generic_COBALT_nml)
        cobalt%jdin_plus_btm(i,j,k)  = cobalt%jno3(i,j,k) + cobalt%jnh4(i,j,k)
     enddo; enddo; enddo  !} i,j,k
 
+    ! sjd
+    do j = jsc, jec ; do i = isc, iec  !{
+      k = grid_kmt(i,j)
+      rho_dzt_bot(i,j) = 0.0
+      if (k .gt. 0) then !{
+        do k = grid_kmt(i,j),1,-1   !{
+          if (rho_dzt_bot(i,j).lt.cobalt%Rho_0*cobalt%bottom_thickness) then
+            rho_dzt_bot(i,j) = rho_dzt_bot(i,j) + rho_dzt(i,j,k)
+            k_bot(i,j) = k
+          endif
+        enddo
+      endif
+    enddo; enddo
+    ! sjd
+
     do j = jsc, jec ; do i = isc, iec  !{
        k = grid_kmt(i,j)
        if (k .gt. 0) then !{
 
           ! CAS added calcite and aragonite redissolution terms
           cobalt%jdiss_cadet_calc_plus_btm(i,j,k)  = cobalt%jdiss_cadet_calc(i,j,k) +  &
-             cobalt%fcased_redis(i,j) / rho_dzt(i,j,k)
+             cobalt%fcased_redis(i,j) / rho_dzt_bot(i,j) ! sjd
           cobalt%jdiss_cadet_arag_plus_btm(i,j,k)  = cobalt%jdiss_cadet_arag(i,j,k) +  &
-             cobalt%f_cadet_arag_btf(i,j,1) / rho_dzt(i,j,k)
+             cobalt%f_cadet_arag_btf(i,j,1) / rho_dzt_bot(i,j) ! sjd
 
           ! CAS added for remoc calculation
-          cobalt%jprod_nh4_plus_btm(i,j,k)  = cobalt%jprod_nh4(i,j,k) + (cobalt%f_ndet_btf(i,j,1) - cobalt%fndet_burial(i,j)) / rho_dzt(i,j,k)
+          cobalt%jprod_nh4_plus_btm(i,j,k)  = cobalt%jprod_nh4(i,j,k) + (cobalt%f_ndet_btf(i,j,1) - cobalt%fndet_burial(i,j)) / rho_dzt_bot(i,j) ! sjd
 
 
           cobalt%jalk_plus_btm(i,j,k)  = cobalt%jalk(i,j,k) +                       &
             (2.0 * (cobalt%fcased_redis(i,j) + cobalt%f_cadet_arag_btf(i,j,1)) +    &
-             cobalt%f_ndet_btf(i,j,1) + cobalt%alk_2_n_denit * cobalt%fno3denit_sed(i,j)) / rho_dzt(i,j,k)
+             cobalt%f_ndet_btf(i,j,1) + cobalt%alk_2_n_denit * cobalt%fno3denit_sed(i,j)) / rho_dzt_bot(i,j) ! sjd
 ! updated
           cobalt%jdic_plus_btm(i,j,k)  = cobalt%jdic(i,j,k) +                       &
             (cobalt%fcased_redis(i,j) + cobalt%f_cadet_arag_btf(i,j,1) +            &
-            ((cobalt%f_ndet_btf(i,j,1) - cobalt%fndet_burial(i,j)) * cobalt%c_2_n)) / rho_dzt(i,j,k)
+            ((cobalt%f_ndet_btf(i,j,1) - cobalt%fndet_burial(i,j)) * cobalt%c_2_n)) / rho_dzt_bot(i,j) ! sjd
 
 ! CAS is ffe_sed a biogenic source or is it similar to coast/atmosphere source?
-          cobalt%jfed_plus_btm(i,j,k)  = cobalt%jfed(i,j,k) + (cobalt%ffe_sed(i,j)+cobalt%ffe_geotherm(i,j)) / rho_dzt(i,j,k)
+          cobalt%jfed_plus_btm(i,j,k)  = cobalt%jfed(i,j,k) + (cobalt%ffe_sed(i,j)+cobalt%ffe_geotherm(i,j)) / rho_dzt_bot(i,j) ! sjd
 ! updated
 ! CAS: fixed parentheses (commented out old for comparison, think rho_dzt should only divide bottom fluxes)
-          cobalt%jnh4_plus_btm(i,j,k)  = cobalt%jnh4(i,j,k) + (cobalt%f_ndet_btf(i,j,1) - cobalt%fndet_burial(i,j)) / rho_dzt(i,j,k)     
-!          cobalt%jnh4_plus_btm(i,j,k)  = (cobalt%jnh4(i,j,k) + cobalt%f_ndet_btf(i,j,1) - cobalt%fndet_burial(i,j)) / rho_dzt(i,j,k)
+          cobalt%jnh4_plus_btm(i,j,k)  = cobalt%jnh4(i,j,k) + (cobalt%f_ndet_btf(i,j,1) - cobalt%fndet_burial(i,j)) / rho_dzt_bot(i,j)     
+!          cobalt%jnh4_plus_btm(i,j,k)  = (cobalt%jnh4(i,j,k) + cobalt%f_ndet_btf(i,j,1) - cobalt%fndet_burial(i,j)) / rho_dzt_bot(i,j)
 
 ! NOTE: should fno3denit_sed be SUBTRACTED ?
 ! CAS: yes, I think so, I've made the change
-          cobalt%jno3_plus_btm(i,j,k)  = cobalt%jno3(i,j,k) - cobalt%fno3denit_sed(i,j) / rho_dzt(i,j,k)
+          cobalt%jno3_plus_btm(i,j,k)  = cobalt%jno3(i,j,k) - cobalt%fno3denit_sed(i,j) / rho_dzt_bot(i,j) ! sjd
 
           cobalt%jo2_plus_btm(i,j,k)   = cobalt%jo2(i,j,k) +                        &
-            (cobalt%o2_2_nh4 * (cobalt%fnoxic_sed(i,j) + cobalt%fnfeso4red_sed(i,j))) / rho_dzt(i,j,k)
+            (cobalt%o2_2_nh4 * (cobalt%fnoxic_sed(i,j) + cobalt%fnfeso4red_sed(i,j))) / rho_dzt_bot(i,j) ! sjd
 
 ! updated
 ! CAS: fixed parentheses to not include jpo4 as in jnh4 example above
-          cobalt%jpo4_plus_btm(i,j,k)  = cobalt%jpo4(i,j,k) + (cobalt%f_pdet_btf(i,j,1) - cobalt%fpdet_burial(i,j)) / rho_dzt(i,j,k)     
+          cobalt%jpo4_plus_btm(i,j,k)  = cobalt%jpo4(i,j,k) + (cobalt%f_pdet_btf(i,j,1) - cobalt%fpdet_burial(i,j)) / rho_dzt_bot(i,j) ! sjd     
 
           cobalt%jsio4_plus_btm(i,j,k) = cobalt%jsio4(i,j,k) + cobalt%f_sidet_btf(i,j,1) / rho_dzt(i,j,k)   
 
@@ -8788,15 +8945,15 @@ write (stdlogunit, generic_COBALT_nml)
 !
 ! CHECK3 Remineralization of Organic Carbon, remoc=(jprod_nh4*c_2_n/dht) for k=1,kbot-1 + (jprod_nh4+f_ndet_btf-fndet_burial)*c_2_n/dht for k=kbot
 ! CAS: will code this up when I address denitrification issue
-    do j = jsc, jec ; do i = isc, iec  !{
-       kbot = grid_kmt(i,j)
-       if (kbot .gt. 0) then !{
-       do k = 1, kbot-1  !{
-          cobalt%remoc(i,j,k) = cobalt%jprod_nh4(i,j,k) * cobalt%c_2_n / dzt(i,j,k)
-       enddo  !} k
-       cobalt%remoc(i,j,kbot) = (cobalt%jprod_nh4(i,j,kbot) + cobalt%f_ndet_btf(i,j,1) - cobalt%fndet_burial(i,j)) * cobalt%c_2_n / dzt(i,j,kbot)
-       endif !}
-    enddo; enddo  !} i, j
+!    do j = jsc, jec ; do i = isc, iec  !{
+!       kbot = grid_kmt(i,j)
+!       if (kbot .gt. 0) then !{
+!       do k = 1, kbot-1  !{
+!          cobalt%remoc(i,j,k) = cobalt%jprod_nh4(i,j,k) * cobalt%c_2_n / dzt(i,j,k)
+!       enddo  !} k
+!       cobalt%remoc(i,j,kbot) = (cobalt%jprod_nh4(i,j,kbot) + cobalt%f_ndet_btf(i,j,1) - cobalt%fndet_burial(i,j)) * cobalt%c_2_n / dzt(i,j,kbot)
+!       endif !}
+!    enddo; enddo  !} i, j
 
 
 !****************************************************************************************************
@@ -9187,15 +9344,88 @@ write (stdlogunit, generic_COBALT_nml)
 
     do j = jsc, jec ; do i = isc, iec ; !{
       if (grid_kmt(i,j) .gt. 0) then !{
-         cobalt%btm_temp(i,j) = TEMP(i,j,grid_kmt(i,j))
-         cobalt%btm_o2(i,j) = cobalt%f_o2(i,j,grid_kmt(i,j))
-         cobalt%btm_htotal(i,j) = cobalt%f_htotal(i,j,grid_kmt(i,j))
-         cobalt%btm_co3_sol_arag(i,j) = cobalt%co3_sol_arag(i,j,grid_kmt(i,j))
-         cobalt%btm_co3_sol_calc(i,j) = cobalt%co3_sol_calc(i,j,grid_kmt(i,j))
-         cobalt%btm_co3_ion(i,j) = cobalt%f_co3_ion(i,j,grid_kmt(i,j))
+        ! cobalt%btm_temp(i,j) = TEMP(i,j,grid_kmt(i,j))
+        ! cobalt%btm_o2(i,j) = cobalt%f_o2(i,j,grid_kmt(i,j))
+        ! cobalt%btm_htotal(i,j) = cobalt%f_htotal(i,j,grid_kmt(i,j))
+        ! cobalt%btm_co3_sol_arag(i,j) = cobalt%co3_sol_arag(i,j,grid_kmt(i,j))
+        ! cobalt%btm_co3_sol_calc(i,j) = cobalt%co3_sol_calc(i,j,grid_kmt(i,j))
+        ! cobalt%btm_co3_ion(i,j) = cobalt%f_co3_ion(i,j,grid_kmt(i,j))
          cobalt%cased_2d(i,j) = cobalt%f_cased(i,j,1)      
       endif
     enddo; enddo  !} i, j
+
+    ! sjd
+    ! Calculate the bottom layer over a thickness defined by
+    ! cobalt%bottom_thickness
+    ! rather than the bottom-most layer as in MOM4/5.  This avoids numerical
+    ! issues
+    ! generated in "vanishing" layers that overlie the benthos in most regions.  
+    do j = jsc, jec ; do i = isc, iec  !{
+       rho_dzt_bot(i,j) = 0.0
+       cobalt%btm_temp(i,j) = 0.0
+       cobalt%btm_o2(i,j) = 0.0
+       cobalt%btm_dic(i,j) = 0.0
+       cobalt%btm_alk(i,j) = 0.0
+       cobalt%btm_htotal(i,j) = 0.0
+       cobalt%btm_co3_sol_arag(i,j) = 0.0
+       cobalt%btm_co3_sol_calc(i,j) = 0.0
+       cobalt%btm_co3_ion(i,j) = 0.0
+       cobalt%btm_omega_calc(i,j) = 0.0
+       cobalt%btm_omega_arag(i,j) = 0.0
+       k_bot(i,j) = 0
+       k = grid_kmt(i,j)
+       if (k .gt. 0) then !{
+         do k = grid_kmt(i,j),1,-1   !{
+           if (rho_dzt_bot(i,j).lt.cobalt%Rho_0*cobalt%bottom_thickness) then
+             k_bot(i,j) = k
+             rho_dzt_bot(i,j) = rho_dzt_bot(i,j) + rho_dzt(i,j,k)
+             cobalt%btm_o2(i,j) = cobalt%btm_o2(i,j) + &
+               cobalt%f_o2(i,j,k)*rho_dzt(i,j,k)
+             cobalt%btm_alk(i,j) = cobalt%btm_alk(i,j) + &
+               cobalt%f_alk(i,j,k)*rho_dzt(i,j,k)
+             cobalt%btm_dic(i,j) = cobalt%btm_dic(i,j) + &
+               cobalt%f_dic(i,j,k)*rho_dzt(i,j,k)
+             cobalt%btm_temp(i,j) = cobalt%btm_temp(i,j) + &
+               Temp(i,j,k)*rho_dzt(i,j,k)
+             cobalt%btm_htotal(i,j) = cobalt%btm_htotal(i,j) + &
+               cobalt%f_htotal(i,j,k)*rho_dzt(i,j,k)
+             cobalt%btm_co3_sol_arag(i,j) = cobalt%btm_co3_sol_arag(i,j) + &
+               cobalt%co3_sol_arag(i,j,k)*rho_dzt(i,j,k)
+             cobalt%btm_co3_sol_calc(i,j) = cobalt%btm_co3_sol_calc(i,j) + &
+               cobalt%co3_sol_calc(i,j,k)*rho_dzt(i,j,k)
+             cobalt%btm_co3_ion(i,j) = cobalt%btm_co3_ion(i,j) + &
+               cobalt%f_co3_ion(i,j,k)*rho_dzt(i,j,k)
+           endif
+         enddo
+         ! calculate overshoot and subtract off
+         drho_dzt = rho_dzt_bot(i,j) - cobalt%Rho_0*cobalt%bottom_thickness
+         cobalt%btm_temp(i,j)=cobalt%btm_temp(i,j)-Temp(i,j,k_bot(i,j))*drho_dzt
+         cobalt%btm_o2(i,j)=cobalt%btm_o2(i,j)-cobalt%f_o2(i,j,k_bot(i,j))*drho_dzt
+         cobalt%btm_alk(i,j)=cobalt%btm_alk(i,j)-cobalt%f_alk(i,j,k_bot(i,j))*drho_dzt
+         cobalt%btm_dic(i,j)=cobalt%btm_dic(i,j)-cobalt%f_dic(i,j,k_bot(i,j))*drho_dzt
+         cobalt%btm_htotal(i,j)=cobalt%btm_htotal(i,j)-cobalt%f_htotal(i,j,k_bot(i,j))*drho_dzt
+         cobalt%btm_co3_sol_arag(i,j)=cobalt%btm_co3_sol_arag(i,j)-cobalt%co3_sol_arag(i,j,k_bot(i,j))*drho_dzt
+         cobalt%btm_co3_sol_calc(i,j)=cobalt%btm_co3_sol_calc(i,j)-cobalt%co3_sol_calc(i,j,k_bot(i,j))*drho_dzt
+         cobalt%btm_co3_ion(i,j)=cobalt%btm_co3_ion(i,j)-cobalt%f_co3_ion(i,j,k_bot(i,j))*drho_dzt
+         ! convert back to moles kg-1
+         cobalt%btm_temp(i,j)=cobalt%btm_temp(i,j)/(cobalt%bottom_thickness*cobalt%Rho_0)
+         cobalt%btm_o2(i,j)=cobalt%btm_o2(i,j)/(cobalt%bottom_thickness*cobalt%Rho_0)
+         cobalt%btm_alk(i,j)=cobalt%btm_alk(i,j)/(cobalt%bottom_thickness*cobalt%Rho_0)
+         cobalt%btm_dic(i,j)=cobalt%btm_dic(i,j)/(cobalt%bottom_thickness*cobalt%Rho_0)
+         cobalt%btm_htotal(i,j)=cobalt%btm_htotal(i,j)/(cobalt%bottom_thickness*cobalt%Rho_0)
+         cobalt%btm_co3_sol_arag(i,j)=cobalt%btm_co3_sol_arag(i,j)/(cobalt%bottom_thickness*cobalt%Rho_0)
+         cobalt%btm_co3_sol_calc(i,j)=cobalt%btm_co3_sol_calc(i,j)/(cobalt%bottom_thickness*cobalt%Rho_0)
+         cobalt%btm_co3_ion(i,j)=cobalt%btm_co3_ion(i,j)/(cobalt%bottom_thickness*cobalt%Rho_0)
+         ! calculate bottom saturation states
+         cobalt%btm_omega_calc(i,j) = cobalt%btm_co3_ion(i,j)/cobalt%btm_co3_sol_calc(i,j)
+         cobalt%btm_omega_arag(i,j) = cobalt%btm_co3_ion(i,j)/cobalt%btm_co3_sol_arag(i,j)
+       endif
+    enddo; enddo
+
+
+    ! sjd
+
+
 
     !
     !---------------------------------------------------------------------
@@ -9641,6 +9871,12 @@ write (stdlogunit, generic_COBALT_nml)
          used = g_send_data(cobalt%id_jfed,       cobalt%jfed*rho_dzt,       &
          model_time, rmask = grid_tmask,&
          is_in=isc, js_in=jsc, ks_in=1,ie_in=iec, je_in=jec, ke_in=nk)
+    !liao
+    if (cobalt%id_jfedc .gt. 0)              &
+         used = g_send_data(cobalt%id_jfedc,       cobalt%jfed,       &
+         model_time, rmask = grid_tmask,&
+         is_in=isc, js_in=jsc, ks_in=1,ie_in=iec, je_in=jec, ke_in=nk)
+    !liao    
     if (cobalt%id_jfe_ads .gt. 0)              &
          used = g_send_data(cobalt%id_jfe_ads,       cobalt%jfe_ads*rho_dzt,       &
          model_time, rmask = grid_tmask,&
@@ -10035,6 +10271,22 @@ write (stdlogunit, generic_COBALT_nml)
        used = g_send_data(cobalt%id_btm_o2,      cobalt%btm_o2,                &
        model_time, rmask = grid_tmask(:,:,1),&
        is_in=isc, js_in=jsc,ie_in=iec, je_in=jec)
+
+   ! sjd
+   if (cobalt%id_btm_no3 .gt. 0)            &
+       used = g_send_data(cobalt%id_btm_no3,      cobalt%btm_no3,&
+       model_time, rmask = grid_tmask(:,:,1),&
+       is_in=isc, js_in=jsc,ie_in=iec, je_in=jec)
+   if (cobalt%id_btm_alk .gt. 0)            &
+       used = g_send_data(cobalt%id_btm_alk,      cobalt%btm_alk,&
+       model_time, rmask = grid_tmask(:,:,1),&
+       is_in=isc, js_in=jsc,ie_in=iec, je_in=jec)
+   if (cobalt%id_btm_dic .gt. 0)            &
+       used = g_send_data(cobalt%id_btm_dic,      cobalt%btm_dic,&
+       model_time, rmask = grid_tmask(:,:,1),&
+       is_in=isc, js_in=jsc,ie_in=iec, je_in=jec)
+   ! sjd
+
    if (cobalt%id_btm_htotal .gt. 0)            &
        used = g_send_data(cobalt%id_btm_htotal,      cobalt%btm_htotal,        &
        model_time, rmask = grid_tmask(:,:,1),&
@@ -10067,6 +10319,17 @@ write (stdlogunit, generic_COBALT_nml)
        used = g_send_data(cobalt%id_btm_co3_sol_calc, cobalt%btm_co3_sol_calc,  &
        model_time, rmask = grid_tmask(:,:,1),&
        is_in=isc, js_in=jsc,ie_in=iec, je_in=jec)
+   
+   ! sjd
+   if (cobalt%id_btm_omega_calc .gt. 0)            &
+       used = g_send_data(cobalt%id_btm_omega_calc, cobalt%btm_omega_calc,  &
+       model_time, rmask = grid_tmask(:,:,1),&
+       is_in=isc, js_in=jsc,ie_in=iec, je_in=jec)
+   if (cobalt%id_btm_omega_arag .gt. 0)            &
+       used = g_send_data(cobalt%id_btm_omega_arag, cobalt%btm_omega_arag,  &
+       model_time, rmask = grid_tmask(:,:,1),&
+       is_in=isc, js_in=jsc,ie_in=iec, je_in=jec)
+   ! sjd
 
     do n= 1, NUM_PHYTO
        if (phyto(n)%id_sfc_f_n .gt. 0)              &
@@ -10532,6 +10795,13 @@ write (stdlogunit, generic_COBALT_nml)
          model_time, rmask = grid_tmask,&
          is_in=isc, js_in=jsc, ks_in=1,ie_in=iec, je_in=jec, ke_in=nk)
 
+    !liao
+    if (cobalt%id_jalkc .gt. 0)              &
+         used = g_send_data(cobalt%id_jalkc, cobalt%jalk,       &
+         model_time, rmask = grid_tmask,&
+         is_in=isc, js_in=jsc, ks_in=1,ie_in=iec, je_in=jec, ke_in=nk)
+    !liao
+
     if (cobalt%id_jalk_plus_btm .gt. 0)              &
          used = g_send_data(cobalt%id_jalk_plus_btm, cobalt%jalk_plus_btm*rho_dzt,       &
          model_time, rmask = grid_tmask,&
@@ -10541,7 +10811,28 @@ write (stdlogunit, generic_COBALT_nml)
          used = g_send_data(cobalt%id_jdic, cobalt%jdic*rho_dzt,       &
          model_time, rmask = grid_tmask,&
          is_in=isc, js_in=jsc, ks_in=1,ie_in=iec, je_in=jec, ke_in=nk)
+    
+    !liao
+    if (cobalt%id_jdicc .gt. 0)              &
+         used = g_send_data(cobalt%id_jdicc, cobalt%jdic,       &
+         model_time, rmask = grid_tmask,&
+         is_in=isc, js_in=jsc, ks_in=1,ie_in=iec, je_in=jec, ke_in=nk)
+    if (cobalt%id_jno3c .gt. 0)              &
+         used = g_send_data(cobalt%id_jno3c, cobalt%jno3,       &
+         model_time, rmask = grid_tmask,&
+         is_in=isc, js_in=jsc, ks_in=1,ie_in=iec, je_in=jec, ke_in=nk)
 
+    if (cobalt%id_jpo4c .gt. 0)              &
+         used = g_send_data(cobalt%id_jpo4c, cobalt%jpo4,       &
+         model_time, rmask = grid_tmask,&
+         is_in=isc, js_in=jsc, ks_in=1,ie_in=iec, je_in=jec, ke_in=nk)
+
+    if (cobalt%id_jsio4c .gt. 0)              &
+         used = g_send_data(cobalt%id_jsio4c, cobalt%jsio4,       &
+         model_time, rmask = grid_tmask,&
+         is_in=isc, js_in=jsc, ks_in=1,ie_in=iec, je_in=jec, ke_in=nk)
+    !liao
+    
     if (cobalt%id_jdic_plus_btm .gt. 0)              &
          used = g_send_data(cobalt%id_jdic_plus_btm, cobalt%jdic_plus_btm*rho_dzt,       &
          model_time, rmask = grid_tmask,&
@@ -10566,6 +10857,20 @@ write (stdlogunit, generic_COBALT_nml)
          used = g_send_data(cobalt%id_jo2_plus_btm, cobalt%jo2_plus_btm*rho_dzt,       &
          model_time, rmask = grid_tmask,&
          is_in=isc, js_in=jsc, ks_in=1,ie_in=iec, je_in=jec, ke_in=nk)
+
+    !liao
+    if (cobalt%id_jo2 .gt. 0)              &
+         used = g_send_data(cobalt%id_jo2, cobalt%jo2*rho_dzt,  &
+         model_time, rmask = grid_tmask,&
+         is_in=isc, js_in=jsc, ks_in=1,ie_in=iec, je_in=jec, ke_in=nk)
+
+    if (cobalt%id_jo2c .gt. 0)              &
+         used = g_send_data(cobalt%id_jo2c, cobalt%jo2,  &     
+         model_time, rmask = grid_tmask,&
+         is_in=isc, js_in=jsc, ks_in=1,ie_in=iec, je_in=jec, ke_in=nk)
+    !liao
+
+
 
 !==============================================================================================================
 !  2016/07/05 jgj  send temperature as a test
@@ -12608,10 +12913,15 @@ write (stdlogunit, generic_COBALT_nml)
 
    allocate(cobalt%btm_temp(isd:ied,jsd:jed))              ; cobalt%btm_temp = 0.0
    allocate(cobalt%btm_o2(isd:ied,jsd:jed))                ; cobalt%btm_o2 = 0.0
-   allocate(cobalt%btm_htotal(isd:ied,jsd:jed))                ; cobalt%btm_htotal = 0.0
+   allocate(cobalt%btm_no3(isd:ied,jsd:jed))               ; cobalt%btm_no3 =0.0 ! sjd
+   allocate(cobalt%btm_alk(isd:ied,jsd:jed))               ; cobalt%btm_alk =0.0 ! sjd
+   allocate(cobalt%btm_dic(isd:ied,jsd:jed))               ; cobalt%btm_dic =0.0 ! sjd
+   allocate(cobalt%btm_htotal(isd:ied,jsd:jed))            ; cobalt%btm_htotal =0.0
    allocate(cobalt%btm_co3_ion(isd:ied,jsd:jed))           ; cobalt%btm_co3_ion = 0.0
    allocate(cobalt%btm_co3_sol_arag(isd:ied,jsd:jed))      ; cobalt%btm_co3_sol_arag = 0.0
    allocate(cobalt%btm_co3_sol_calc(isd:ied,jsd:jed))      ; cobalt%btm_co3_sol_calc = 0.0
+   allocate(cobalt%btm_omega_arag(isd:ied,jsd:jed))        ; cobalt%btm_omega_arag = 0.0 ! sjd
+   allocate(cobalt%btm_omega_calc(isd:ied,jsd:jed))        ; cobalt%btm_omega_calc = 0.0 ! sjd
    allocate(cobalt%cased_2d(isd:ied,jsd:jed))              ; cobalt%cased_2d = 0.0
 
    allocate(cobalt%o2min(isd:ied, jsd:jed))                ; cobalt%o2min=0.0
@@ -12996,10 +13306,15 @@ write (stdlogunit, generic_COBALT_nml)
     deallocate(cobalt%flithdet_100)
     deallocate(cobalt%btm_temp)
     deallocate(cobalt%btm_o2)
+    deallocate(cobalt%btm_no3)  ! sjd
+    deallocate(cobalt%btm_alk)  ! sjd
+    deallocate(cobalt%btm_dic)  ! sjd
     deallocate(cobalt%btm_htotal)
     deallocate(cobalt%btm_co3_ion)
     deallocate(cobalt%btm_co3_sol_arag)
     deallocate(cobalt%btm_co3_sol_calc)
+    deallocate(cobalt%btm_omega_arag) ! sjd
+    deallocate(cobalt%btm_omega_calc) ! sjd 
     deallocate(cobalt%cased_2d)
     deallocate(cobalt%o2min)
     deallocate(cobalt%z_o2min)
