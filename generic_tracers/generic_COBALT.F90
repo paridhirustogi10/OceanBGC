@@ -6558,7 +6558,6 @@ write (stdlogunit, generic_COBALT_nml)
     integer, dimension(:,:), Allocatable :: k_bot ! sjd
     real, dimension(:), Allocatable   :: tmp_irr_band
     real, dimension(:,:), Allocatable :: rho_dzt_100, rho_dzt_200, rho_dzt_bot ! sjd
-    real, dimension(:,:), Allocatable :: rho_dzt_100, rho_dzt_200
     real, dimension(:,:,:), Allocatable :: z_remin_ramp
     real,dimension(1:NUM_ZOO,1:NUM_PREY) :: ipa_matrix,pa_matrix,ingest_matrix
     real,dimension(1:NUM_PREY) :: hp_ipa_vec,hp_pa_vec,hp_ingest_vec
@@ -7948,15 +7947,15 @@ write (stdlogunit, generic_COBALT_nml)
              ! fpoc_bottom in micromoles C cm-2 day-1 for denitrification relationship, cap at 43
              ! to prevent anomalous extrapolation of the relationship
              ! sjd change to log10, hopefully in main by next merge
-             log_fpoc_btm = log10(min(43.0,0.1*fpoc_btm))
-             cobalt%fno3denit_sed(i,j) = min(cobalt%btm_no3(i,j)*cobalt%Rho_0*r_dt,  &      
-                  min((cobalt%f_ndet_btf(i,j,1)-cobalt%fndet_burial(i,j))*cobalt%n_2_n_denit, & 
+             log10_fpoc_btm = log10(min(43.0,0.1*fpoc_btm))
+             cobalt%fno3denit_sed(i,j) = min(cobalt%btm_no3(i,j)*cobalt%Rho_0*r_dt,  &
+                  min((cobalt%f_ndet_btf(i,j,1)-cobalt%fndet_burial(i,j))*cobalt%n_2_n_denit,&
                   10.0**(-0.9543+0.7662*log10_fpoc_btm - 0.235*log10_fpoc_btm**2.0)/(cobalt%c_2_n*sperd*100.0)* &
                   cobalt%n_2_n_denit*cobalt%btm_no3(i,j)/(cobalt%k_no3_denit + cobalt%btm_no3(i,j)))) * &
                   cobalt%zt(i,j,k) / (cobalt%z_burial + cobalt%zt(i,j,k))
-             ! uncomment "no mass change" test 
-             !cobalt%fno3denit_sed(i,j) = 0.0             
-             if (cobalt%btm_o2(i,j,k) .gt. cobalt%o2_min) then  !{
+             ! uncomment "no mass change" test
+             !cobalt%fno3denit_sed(i,j) = 0.0
+             if (cobalt%btm_o2(i,j) .gt. cobalt%o2_min) then  !{
                 cobalt%fnoxic_sed(i,j) = max(0.0, min(cobalt%btm_o2(i,j)*cobalt%bottom_thickness* &
                                          cobalt%Rho_0*r_dt*(1.0/cobalt%o2_2_nh4), &
                                          cobalt%f_ndet_btf(i,j,1) - cobalt%fndet_burial(i,j) - &
@@ -8929,7 +8928,7 @@ write (stdlogunit, generic_COBALT_nml)
 ! CAS: fixed parentheses to not include jpo4 as in jnh4 example above
           cobalt%jpo4_plus_btm(i,j,k)  = cobalt%jpo4(i,j,k) + (cobalt%f_pdet_btf(i,j,1) - cobalt%fpdet_burial(i,j)) / rho_dzt_bot(i,j) ! sjd     
 
-          cobalt%jsio4_plus_btm(i,j,k) = cobalt%jsio4(i,j,k) + cobalt%f_sidet_btf(i,j,1) / rho_dzt_botm(i,j,k) ! sjd   
+          cobalt%jsio4_plus_btm(i,j,k) = cobalt%jsio4(i,j,k) + cobalt%f_sidet_btf(i,j,1) / rho_dzt_bot(i,j) ! sjd   
 
           cobalt%jdin_plus_btm(i,j,k)  = cobalt%jno3_plus_btm(i,j,k) + cobalt%jnh4_plus_btm(i,j,k) 
           

@@ -1581,7 +1581,6 @@ contains
 
              kw_asym_array = kw_asym_array+temp_array
 
-/rray=0.0
              u10_array=0.0
              call extract_coupler_values(BC_struc  =IOB_struc, &
                   BC_index  =g_tracer%flux_gas_ind,    &
@@ -1609,7 +1608,7 @@ contains
              !This does temp_array=conv
              !*BC_struc%bc(flux_gas_ind)%field(ind_flux)%values
 
-             ust_array = ust_array+temp_arraybin/bash: bgr_prustogi: command not found
+             ust_array = ust_array+temp_array
           endif
           
        endif
@@ -1680,6 +1679,7 @@ contains
              call g_tracer_set_values(g_tracer,g_tracer%name,'deltap',deltap_array,&
                   g_tracer_com%isd,g_tracer_com%jsd, weight)
              call g_tracer_set_values(g_tracer,g_tracer%name,'kw',kw_array,&
+                  g_tracer_com%isd,g_tracer_com%jsd, weight) 
              call g_tracer_set_values(g_tracer,g_tracer%name,'kw_asym',kw_asym_array,& !Xiaohui
                   g_tracer_com%isd,g_tracer_com%jsd, weight)   ! # bgr_prustogi
              call g_tracer_set_values(g_tracer,g_tracer%name,'u10',u10_array,&
@@ -2103,15 +2103,10 @@ contains
        array = g_tracer%stf_gas
     case ('deltap') 
        array = g_tracer%deltap
-    case ('kw') 
-       array = g_tracer%kw
-    case ('kw_asym') ! Xiaohui
-       array_ptr => g_tracer%kw_asym
-    ! bgr_prustogi
-    case ('u10')
-       array_ptr => g_tracer%u10
-    case ('ust')
-       array_ptr => g_tracer%ust
+    case ('kw')
+       array = g_tracer%kw ! missing ust, u10? pr7874
+    case ('kw_asym')
+       array = g_tracer%kw_asym !Xiaohui
     case ('btf') 
        array = g_tracer%btf
     case ('btm_reservoir') 
@@ -2256,13 +2251,13 @@ contains
        g_tracer%deltap = w0*g_tracer%deltap + w1*array
     case ('kw') 
        g_tracer%kw     = w0*g_tracer%kw + w1*array
-    case ('kw_asym') !Xiaohui
-       g_tracer%kw_asym        = value
-    ! # bgr_prustogi
+    case ('kw_asym')  !Xiaohui
+       g_tracer%kw_asym     = w0*g_tracer%kw_asym + w1*array
+    ! bgr_prustogi
     case ('u10')
-       g_tracer%u10        = value
+       g_tracer%u10    = w0*g_tracer%u10 + w1*array
     case ('ust')
-       g_tracer%ust        = value
+       g_tracer%ust    = w0*g_tracer%ust + w1*array
     case ('btf') 
        g_tracer%btf    = w0*g_tracer%btf + w1*array
     case ('btm_reservoir') 
@@ -2326,9 +2321,9 @@ contains
        g_tracer%vdiffuse_impl  = array 
     !liao
     case ('vdiffusec_impl')
-       array(:,:,:) = g_tracer%vdiffusec_impl(:,:,:)
+       g_tracer%vdiffusec_impl  = array
     case ('boundary_forcing_tend')
-       array(:,:,:) = g_tracer%boundary_forcing_tend(:,:,:)
+       g_tracer%boundary_forcing_tend  = array
     !liao
     case default 
        call mpp_error(FATAL, trim(sub_name)//": Not a known member variable: "//trim(member))   
@@ -2407,18 +2402,16 @@ contains
        g_tracer%sc_no     = value 
     case ('stf') 
        g_tracer%stf       = value 
-       g_tracer%runoff_added_to_stf = .false.
     case ('stf_gas') 
        g_tracer%stf_gas   = value 
     case ('deltap') 
        g_tracer%deltap    = value 
     case ('kw') 
        g_tracer%kw        = value 
-    case ('kw_asym')
-       array = g_tracer%kw_asym !Xiaohui
-    ! # bgr_prustogi
+    case ('kw_asym')                   
+       g_tracer%kw_asym        = value    ! # Xioahui
     case ('u10')
-       g_tracer%u10        = value
+       g_tracer%u10        = value ! bgr_prustogi
     case ('ust')
        g_tracer%ust        = value
     case ('btf') 
